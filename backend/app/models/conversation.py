@@ -1,7 +1,7 @@
 """Conversation ORM model."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -21,21 +21,21 @@ class Conversation(BaseModel):
     customer_name: Mapped[str] = mapped_column(String(100), nullable=False)
     customer_email: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="OPEN", nullable=False)
-    topic: Mapped[str | None] = mapped_column(Text, nullable=True)
-    resolved_at: Mapped[datetime | None] = mapped_column(
+    topic: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    resolved_by: Mapped[int | None] = mapped_column(
+    resolved_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True
     )
 
-    messages: Mapped[list["Message"]] = relationship(
+    messages: Mapped[List["Message"]] = relationship(
         "Message",
         back_populates="conversation",
         cascade="all, delete-orphan",
         lazy="select",
     )
-    escalation_events: Mapped[list["EscalationEvent"]] = relationship(
+    escalation_events: Mapped[List["EscalationEvent"]] = relationship(
         "EscalationEvent",
         back_populates="conversation",
         cascade="all, delete-orphan",

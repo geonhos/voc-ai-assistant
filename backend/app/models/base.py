@@ -1,6 +1,7 @@
 """Declarative base and shared timestamp mixin for all ORM models."""
 
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import DateTime, Integer, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -18,7 +19,7 @@ class TimestampMixin:
         server_default=func.now(),
         nullable=False,
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         onupdate=func.now(),
         nullable=True,

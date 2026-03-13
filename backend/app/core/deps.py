@@ -1,5 +1,7 @@
 """FastAPI dependency factories for DB sessions and authenticated users."""
 
+from __future__ import annotations
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError

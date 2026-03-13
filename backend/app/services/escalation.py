@@ -1,5 +1,7 @@
 """Escalation service — manages EscalationEvent records and conversation promotion."""
 
+from __future__ import annotations
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation

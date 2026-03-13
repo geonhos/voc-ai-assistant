@@ -1,5 +1,7 @@
 """Authentication router — login and token refresh."""
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import JWTError
 from sqlalchemy import select

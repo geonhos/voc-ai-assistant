@@ -1,5 +1,7 @@
 """Pydantic schemas for conversation-related endpoints."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Literal
 

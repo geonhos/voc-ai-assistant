@@ -1,5 +1,7 @@
 """Notification service — Slack webhook integration."""
 
+from __future__ import annotations
+
 import logging
 
 import httpx

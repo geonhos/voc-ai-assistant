@@ -1,5 +1,7 @@
 """KnowledgeArticle ORM model with pgvector embedding support."""
 
+from typing import Optional
+
 from sqlalchemy import ARRAY, Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,7 +30,7 @@ class KnowledgeArticle(BaseModel):
         nullable=True,
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_by: Mapped[int | None] = mapped_column(
+    created_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True
     )
 

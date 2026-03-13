@@ -1,7 +1,7 @@
 """EscalationEvent ORM model."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -26,10 +26,10 @@ class EscalationEvent(BaseModel):
         server_default=func.now(),
         nullable=False,
     )
-    resolved_at: Mapped[datetime | None] = mapped_column(
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    resolved_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resolved_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     conversation: Mapped["Conversation"] = relationship(
         "Conversation",

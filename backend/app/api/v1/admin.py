@@ -1,5 +1,7 @@
 """Admin router — conversation management and dashboard statistics."""
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +17,9 @@ from app.schemas.conversation import (
     ConversationStatusUpdate,
 )
 from app.schemas.dashboard import DashboardStats
+from app.schemas.message import ChatRequest, MessageResponse
 from app.services import conversation as conv_service
+from app.services import admin_message as admin_msg_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -179,3 +183,45 @@ async def get_dashboard_stats(
         total_knowledge_articles=kb_row.total,
         active_knowledge_articles=kb_row.active,
     )
+
+
+@router.post(
+    "/conversations/{conversation_id}/messages",
+    response_model=MessageResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Send an admin message into a conversation",
+)
+async def send_admin_message(
+    conversation_id: int,
+    payload: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> MessageResponse:
+    """Post a message from an admin into an existing conversation.
+
+    This is used by support staff to intervene in escalated or active
+    conversations directly from the admin dashboard.
+
+    Args:
+        conversation_id: Primary key of the target conversation.
+        payload: Contains the message text.
+        db: Active async database session.
+        admin: Authenticated admin user (used as the sender identity).
+
+    Returns:
+        The persisted MessageResponse.
+
+    Raises:
+        HTTPException 404: If the conversation does not exist.
+    """
+    conversation = await conv_service.get_conversation(db, conversation_id)
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found",
+        )
+
+    message = await admin_msg_service.send_admin_message(
+        db, conversation_id, admin.id, payload.text
+    )
+    return MessageResponse.model_validate(message)

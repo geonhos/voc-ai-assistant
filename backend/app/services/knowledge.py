@@ -1,10 +1,16 @@
 """Knowledge article service."""
 
+from __future__ import annotations
+
+import logging
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import KnowledgeArticle
 from app.schemas.knowledge import KnowledgeArticleCreate, KnowledgeArticleUpdate
+
+logger = logging.getLogger(__name__)
 
 
 async def create_article(
@@ -32,6 +38,19 @@ async def create_article(
     )
     db.add(article)
     await db.flush()
+
+    # Generate embedding asynchronously after the row is flushed so we have an id.
+    try:
+        from app.services.embedding import generate_embedding
+
+        embedding_text = f"{article.title}\n{article.category}\n{article.content}"
+        article.embedding = await generate_embedding(embedding_text)
+        await db.flush()
+    except Exception as e:
+        logger.warning(
+            "Failed to generate embedding for article %s: %s", article.id, e
+        )
+
     return article
 
 
@@ -104,10 +123,27 @@ async def update_article(
         return None
 
     update_data = payload.model_dump(exclude_none=True)
+    content_fields_changed = bool(
+        update_data.keys() & {"title", "category", "content"}
+    )
     for field, value in update_data.items():
         setattr(article, field, value)
 
     await db.flush()
+
+    # Regenerate embedding only when text content has actually changed.
+    if content_fields_changed:
+        try:
+            from app.services.embedding import generate_embedding
+
+            embedding_text = f"{article.title}\n{article.category}\n{article.content}"
+            article.embedding = await generate_embedding(embedding_text)
+            await db.flush()
+        except Exception as e:
+            logger.warning(
+                "Failed to regenerate embedding for article %s: %s", article.id, e
+            )
+
     return article
 
 

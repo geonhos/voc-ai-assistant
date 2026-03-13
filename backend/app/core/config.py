@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     SLACK_WEBHOOK_URL: str = ""
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    # AI / RAG settings
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    RAG_TOP_K: int = 3
+    RAG_SIMILARITY_THRESHOLD: float = 0.3
+    CONFIDENCE_ESCALATE_THRESHOLD: float = 0.5
+    MAX_LOW_CONFIDENCE_STREAK: int = 3
+
     model_config = SettingsConfigDict(env_file=".env")
 
 
