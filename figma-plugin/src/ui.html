@@ -1,0 +1,173 @@
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    color: #111827;
+    padding: 16px;
+    background: #ffffff;
+  }
+  h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #2563EB;
+  }
+  .subtitle {
+    font-size: 11px;
+    color: #6B7280;
+    margin-bottom: 16px;
+  }
+  .section {
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6B7280;
+    margin-bottom: 8px;
+  }
+  label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 4px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  label:hover { background: #F3F4F6; }
+  input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #2563EB;
+  }
+  .screen-desc {
+    font-size: 11px;
+    color: #9CA3AF;
+    margin-left: 22px;
+    margin-top: -4px;
+    margin-bottom: 2px;
+  }
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  button {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-primary {
+    background: #2563EB;
+    color: white;
+  }
+  .btn-primary:hover { background: #1D4ED8; }
+  .btn-primary:disabled { background: #93C5FD; cursor: not-allowed; }
+  .btn-secondary {
+    background: #F3F4F6;
+    color: #111827;
+    border: 1px solid #D1D5DB;
+  }
+  .btn-secondary:hover { background: #E5E7EB; }
+  .select-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .select-actions a {
+    font-size: 11px;
+    color: #2563EB;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .status {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #6B7280;
+    display: none;
+  }
+  .status.visible { display: block; }
+</style>
+
+<h2>VOC AI Assistant</h2>
+<p class="subtitle">Wireframe Generator — 6 Screens</p>
+
+<div class="section">
+  <div class="section-title">Screens</div>
+  <div class="select-actions">
+    <a id="select-all">Select All</a>
+    <a id="select-none">Select None</a>
+  </div>
+
+  <label><input type="checkbox" class="screen-cb" value="customer-chat" checked> 고객 채팅 (/chat)</label>
+  <div class="screen-desc">Stripe 스타일 AI 채팅 + 에스컬레이션 variant</div>
+
+  <label><input type="checkbox" class="screen-cb" value="login" checked> 관리자 로그인 (/login)</label>
+  <div class="screen-desc">Split layout 로그인 폼</div>
+
+  <label><input type="checkbox" class="screen-cb" value="dashboard" checked> 대시보드 (/dashboard)</label>
+  <div class="screen-desc">KPI 카드 + 차트 + 최근 에스컬레이션</div>
+
+  <label><input type="checkbox" class="screen-cb" value="conversation-list" checked> 대화 목록 (/conversations)</label>
+  <div class="screen-desc">필터/검색 + 페이지네이션 테이블</div>
+
+  <label><input type="checkbox" class="screen-cb" value="conversation-detail" checked> 대화 상세 (/conversations/[id])</label>
+  <div class="screen-desc">채팅 로그 + 고객 정보 + 관리자 개입</div>
+
+  <label><input type="checkbox" class="screen-cb" value="knowledge-base" checked> Knowledge Base (/knowledge)</label>
+  <div class="screen-desc">FAQ 문서 CRUD + 편집 모달</div>
+</div>
+
+<div class="actions">
+  <button class="btn-primary" id="generate">Generate</button>
+  <button class="btn-secondary" id="cancel">Cancel</button>
+</div>
+
+<div class="status" id="status">Generating...</div>
+
+<script>
+  const screenCheckboxes = document.querySelectorAll('.screen-cb');
+
+  document.getElementById('select-all').onclick = () => {
+    screenCheckboxes.forEach(cb => cb.checked = true);
+  };
+  document.getElementById('select-none').onclick = () => {
+    screenCheckboxes.forEach(cb => cb.checked = false);
+  };
+
+  document.getElementById('generate').onclick = () => {
+    const selections = {
+      screens: Array.from(screenCheckboxes)
+        .filter(cb => cb.checked)
+        .map(cb => cb.value),
+    };
+
+    document.getElementById('status').classList.add('visible');
+    document.getElementById('status').textContent = 'Generating...';
+    document.getElementById('generate').disabled = true;
+
+    parent.postMessage({ pluginMessage: { type: 'generate', selections } }, '*');
+  };
+
+  document.getElementById('cancel').onclick = () => {
+    parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*');
+  };
+
+  window.onmessage = (event) => {
+    const msg = event.data.pluginMessage;
+    if (msg?.type === 'progress') {
+      document.getElementById('status').textContent = msg.message;
+    }
+    if (msg?.type === 'done') {
+      document.getElementById('status').textContent = msg.message || 'Done!';
+      document.getElementById('generate').disabled = false;
+    }
+  };
+</script>

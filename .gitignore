@@ -18,6 +18,7 @@ node_modules/
 .next/
 out/
 dist/
+!figma-plugin/dist/
 
 # IDE
 .idea/
