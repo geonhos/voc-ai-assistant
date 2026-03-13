@@ -1,0 +1,49 @@
+# Java / Spring Boot
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+*.jar
+*.war
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Node.js
+node_modules/
+.next/
+out/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# Test
+coverage/
+.nyc_output/
+htmlcov/
+.pytest_cache/
