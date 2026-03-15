@@ -26,7 +26,7 @@ class KnowledgeArticle(BaseModel):
         ARRAY(String), nullable=False, default=list
     )
     embedding: Mapped[object] = mapped_column(
-        Vector(1536) if _VECTOR_AVAILABLE else Text,
+        Vector(1024) if _VECTOR_AVAILABLE else Text,
         nullable=True,
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

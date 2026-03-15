@@ -16,6 +16,14 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class MeResponse(BaseModel):
+    """Response body for GET /api/v1/auth/me."""
+
+    id: int
+    email: str
+    role: str
+
+
 class TokenResponse(BaseModel):
     """Response body containing JWT tokens."""
 

@@ -15,6 +15,19 @@ services:
       timeout: 5s
       retries: 5
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   backend:
     build:
       context: ./backend
@@ -24,11 +37,13 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://voc:${DB_PASSWORD:-vocpassword}@db:5432/voc_ai
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-to-a-random-secret-key}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_URL: http://ollama:11434
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
       CORS_ORIGINS: '["http://localhost:3000"]'
     depends_on:
       db:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
@@ -52,3 +67,4 @@ services:
 
 volumes:
   pgdata:
+  ollama_data:

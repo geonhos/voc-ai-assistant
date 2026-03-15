@@ -11,13 +11,14 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    OPENAI_API_KEY: str = ""
+    OLLAMA_URL: str = "http://localhost:11434"
     SLACK_WEBHOOK_URL: str = ""
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
     # AI / RAG settings
-    OPENAI_MODEL: str = "gpt-4o-mini"
-    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    OLLAMA_CHAT_MODEL: str = "qwen2.5:7b"
+    OLLAMA_EMBED_MODEL: str = "bge-m3"
+    EMBEDDING_DIM: int = 1024
     RAG_TOP_K: int = 3
     RAG_SIMILARITY_THRESHOLD: float = 0.3
     CONFIDENCE_ESCALATE_THRESHOLD: float = 0.5

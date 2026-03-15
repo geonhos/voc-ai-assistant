@@ -33,7 +33,6 @@ class MessageResponse(BaseModel):
 class ChatRequest(BaseModel):
     """Customer chat request for the public chat endpoint."""
 
-    conversation_id: int
     text: str
 
 

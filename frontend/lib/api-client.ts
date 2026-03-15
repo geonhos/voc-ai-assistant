@@ -36,7 +36,10 @@ class ApiClient {
         }
       }
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      const detail = Array.isArray(error.detail)
+        ? error.detail.map((e: { msg?: string }) => e.msg).join(', ')
+        : error.detail;
+      throw new Error(detail || `HTTP ${response.status}`);
     }
 
     return response.json();

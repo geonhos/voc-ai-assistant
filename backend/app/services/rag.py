@@ -45,12 +45,12 @@ async def retrieve_context(
     result = await db.execute(
         sql_text("""
             SELECT id, title, content, category,
-                   1 - (embedding <=> :embedding::vector) AS similarity
+                   1 - (embedding <=> CAST(:embedding AS vector)) AS similarity
             FROM knowledge_articles
             WHERE active = true
               AND embedding IS NOT NULL
-              AND 1 - (embedding <=> :embedding::vector) > :threshold
-            ORDER BY embedding <=> :embedding::vector
+              AND 1 - (embedding <=> CAST(:embedding AS vector)) > :threshold
+            ORDER BY embedding <=> CAST(:embedding AS vector)
             LIMIT :top_k
         """),
         {

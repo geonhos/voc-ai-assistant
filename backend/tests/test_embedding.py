@@ -25,38 +25,41 @@ def reset_client():
 @pytest.mark.asyncio
 async def test_generate_embedding_returns_vector():
     """generate_embedding should return a list of floats from the API response."""
-    fake_vector = [0.1] * 1536
+    fake_vector = [0.1] * 1024
 
     mock_response = MagicMock()
-    mock_response.data = [MagicMock(embedding=fake_vector, index=0)]
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json = MagicMock(return_value={"embeddings": [fake_vector]})
 
     mock_client = AsyncMock()
-    mock_client.embeddings.create = AsyncMock(return_value=mock_response)
+    mock_client.post = AsyncMock(return_value=mock_response)
 
     with patch("app.services.embedding._get_client", return_value=mock_client):
         result = await generate_embedding("test text")
 
     assert result == fake_vector
-    mock_client.embeddings.create.assert_awaited_once()
-    call_kwargs = mock_client.embeddings.create.call_args.kwargs
-    assert call_kwargs["input"] == "test text"
+    mock_client.post.assert_awaited_once()
+    call_args = mock_client.post.call_args
+    assert call_args[0][0] == "/api/embed"
+    assert call_args[1]["json"]["input"] == "test text"
 
 
 @pytest.mark.asyncio
 async def test_generate_embedding_uses_correct_model():
     """generate_embedding should call the model from settings."""
-    fake_vector = [0.0] * 1536
+    fake_vector = [0.0] * 1024
     mock_response = MagicMock()
-    mock_response.data = [MagicMock(embedding=fake_vector, index=0)]
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json = MagicMock(return_value={"embeddings": [fake_vector]})
 
     mock_client = AsyncMock()
-    mock_client.embeddings.create = AsyncMock(return_value=mock_response)
+    mock_client.post = AsyncMock(return_value=mock_response)
 
     with patch("app.services.embedding._get_client", return_value=mock_client):
         await generate_embedding("hello")
 
-    call_kwargs = mock_client.embeddings.create.call_args.kwargs
-    assert call_kwargs["model"] == "text-embedding-3-small"
+    call_args = mock_client.post.call_args
+    assert call_args[1]["json"]["model"] == "bge-m3"
 
 
 # ---------------------------------------------------------------------------
@@ -76,22 +79,19 @@ async def test_generate_embeddings_batch_empty_input():
 
 @pytest.mark.asyncio
 async def test_generate_embeddings_batch_preserves_order():
-    """Embeddings must be returned in input order even if API returns them out of order."""
-    vec_a = [1.0] * 1536
-    vec_b = [2.0] * 1536
+    """Embeddings must be returned in input order."""
+    vec_a = [1.0] * 1024
+    vec_b = [2.0] * 1024
 
-    # API returns index=1 before index=0
     mock_response = MagicMock()
-    mock_response.data = [
-        MagicMock(embedding=vec_b, index=1),
-        MagicMock(embedding=vec_a, index=0),
-    ]
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json = MagicMock(return_value={"embeddings": [vec_a, vec_b]})
 
     mock_client = AsyncMock()
-    mock_client.embeddings.create = AsyncMock(return_value=mock_response)
+    mock_client.post = AsyncMock(return_value=mock_response)
 
     with patch("app.services.embedding._get_client", return_value=mock_client):
         result = await generate_embeddings_batch(["first", "second"])
 
-    assert result[0] == vec_a  # index 0 → first input
-    assert result[1] == vec_b  # index 1 → second input
+    assert result[0] == vec_a
+    assert result[1] == vec_b

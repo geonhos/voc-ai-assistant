@@ -188,7 +188,7 @@ async def _seed_articles(session: AsyncSession, admin: User) -> None:
 
 
 async def _generate_embedding(text: str) -> list[float] | None:
-    """Generate a text embedding via OpenAI if an API key is configured.
+    """Generate a text embedding via Ollama.
 
     Args:
         text: The text to embed.
@@ -196,19 +196,17 @@ async def _generate_embedding(text: str) -> list[float] | None:
     Returns:
         A list of floats representing the embedding, or None if unavailable.
     """
-    if not settings.OPENAI_API_KEY:
-        logger.debug("OPENAI_API_KEY not set — skipping embedding generation.")
-        return None
-
     try:
-        from openai import AsyncOpenAI  # noqa: PLC0415
+        import httpx  # noqa: PLC0415
 
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        response = await client.embeddings.create(
-            model=settings.EMBEDDING_MODEL,
-            input=text,
-        )
-        return response.data[0].embedding
+        async with httpx.AsyncClient(base_url=settings.OLLAMA_URL, timeout=60.0) as client:
+            response = await client.post(
+                "/api/embed",
+                json={"model": settings.OLLAMA_EMBED_MODEL, "input": text},
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["embeddings"][0]
     except Exception as exc:  # pragma: no cover
         logger.warning("Embedding generation failed: %s", exc)
         return None

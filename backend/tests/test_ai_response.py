@@ -16,6 +16,7 @@ def _make_mock_db() -> MagicMock:
     mock_db = MagicMock()
     mock_db.flush = AsyncMock()
     mock_db.execute = AsyncMock()
+    mock_db.get = AsyncMock()  # For escalation lookup
     return mock_db
 
 
@@ -85,12 +86,14 @@ def test_check_escalation_keywords_normal_message():
 # ---------------------------------------------------------------------------
 
 
-def _make_fake_completion(content: str) -> MagicMock:
-    """Build a minimal fake OpenAI ChatCompletion response."""
-    completion = MagicMock()
-    completion.choices = [MagicMock()]
-    completion.choices[0].message.content = content
-    return completion
+def _make_fake_ollama_response(content: str) -> MagicMock:
+    """Build a minimal fake Ollama chat response."""
+    response = MagicMock()
+    response.raise_for_status = MagicMock()
+    response.json = MagicMock(return_value={
+        "message": {"content": content},
+    })
+    return response
 
 
 @pytest.mark.asyncio
@@ -103,7 +106,7 @@ async def test_generate_ai_response_returns_message_and_no_escalation():
     history_result.scalars.return_value.all.return_value = []
     mock_db.execute = AsyncMock(return_value=history_result)
 
-    fake_completion = _make_fake_completion("문제가 해결되었습니다. [confidence: 0.9]")
+    fake_response = _make_fake_ollama_response("문제가 해결되었습니다. [confidence: 0.9]")
 
     with (
         patch(
@@ -113,11 +116,7 @@ async def test_generate_ai_response_returns_message_and_no_escalation():
         patch(
             "app.services.ai_response._get_client",
             return_value=AsyncMock(
-                chat=MagicMock(
-                    completions=MagicMock(
-                        create=AsyncMock(return_value=fake_completion)
-                    )
-                )
+                post=AsyncMock(return_value=fake_response)
             ),
         ),
     ):
@@ -138,7 +137,7 @@ async def test_generate_ai_response_escalates_on_keyword():
     history_result.scalars.return_value.all.return_value = []
     mock_db.execute = AsyncMock(return_value=history_result)
 
-    fake_completion = _make_fake_completion(
+    fake_response = _make_fake_ollama_response(
         "환불 처리해 드리겠습니다. [confidence: 0.75]"
     )
 
@@ -150,11 +149,7 @@ async def test_generate_ai_response_escalates_on_keyword():
         patch(
             "app.services.ai_response._get_client",
             return_value=AsyncMock(
-                chat=MagicMock(
-                    completions=MagicMock(
-                        create=AsyncMock(return_value=fake_completion)
-                    )
-                )
+                post=AsyncMock(return_value=fake_response)
             ),
         ),
         patch(
@@ -179,7 +174,7 @@ async def test_generate_ai_response_escalates_on_very_low_confidence():
     history_result.scalars.return_value.all.return_value = []
     mock_db.execute = AsyncMock(return_value=history_result)
 
-    fake_completion = _make_fake_completion("잘 모르겠습니다. [confidence: 0.1]")
+    fake_response = _make_fake_ollama_response("잘 모르겠습니다. [confidence: 0.1]")
 
     with (
         patch(
@@ -189,11 +184,7 @@ async def test_generate_ai_response_escalates_on_very_low_confidence():
         patch(
             "app.services.ai_response._get_client",
             return_value=AsyncMock(
-                chat=MagicMock(
-                    completions=MagicMock(
-                        create=AsyncMock(return_value=fake_completion)
-                    )
-                )
+                post=AsyncMock(return_value=fake_response)
             ),
         ),
         patch(
@@ -211,7 +202,7 @@ async def test_generate_ai_response_escalates_on_very_low_confidence():
 
 @pytest.mark.asyncio
 async def test_generate_ai_response_handles_openai_error_gracefully():
-    """OpenAI failure returns a fallback message without raising."""
+    """Ollama failure returns a fallback message without raising."""
     mock_db = _make_mock_db()
 
     history_result = MagicMock()
@@ -226,11 +217,7 @@ async def test_generate_ai_response_handles_openai_error_gracefully():
         patch(
             "app.services.ai_response._get_client",
             return_value=AsyncMock(
-                chat=MagicMock(
-                    completions=MagicMock(
-                        create=AsyncMock(side_effect=RuntimeError("network error"))
-                    )
-                )
+                post=AsyncMock(side_effect=RuntimeError("network error"))
             ),
         ),
         patch(
@@ -254,7 +241,7 @@ async def test_generate_ai_response_boosts_confidence_on_high_similarity():
     mock_db.execute = AsyncMock(return_value=history_result)
 
     # Model says 0.7 confidence, but similarity is 0.8 → should be boosted to 0.8
-    fake_completion = _make_fake_completion("답변입니다. [confidence: 0.7]")
+    fake_response = _make_fake_ollama_response("답변입니다. [confidence: 0.7]")
     high_similarity_articles = [{"similarity": 0.8, "title": "t", "content": "c", "category": "x", "id": 1}]
 
     with (
@@ -265,11 +252,7 @@ async def test_generate_ai_response_boosts_confidence_on_high_similarity():
         patch(
             "app.services.ai_response._get_client",
             return_value=AsyncMock(
-                chat=MagicMock(
-                    completions=MagicMock(
-                        create=AsyncMock(return_value=fake_completion)
-                    )
-                )
+                post=AsyncMock(return_value=fake_response)
             ),
         ),
     ):

@@ -1,11 +1,11 @@
-"""AI response generation service — OpenAI GPT + RAG pipeline."""
+"""AI response generation service — Ollama LLM + RAG pipeline."""
 
 from __future__ import annotations
 
 import logging
 import re
 
-from openai import AsyncOpenAI
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,18 +57,14 @@ ESCALATION_KEYWORDS: list[str] = [
     "신고",
 ]
 
-_client: AsyncOpenAI | None = None
+_client: httpx.AsyncClient | None = None
 
 
-def _get_client() -> AsyncOpenAI:
-    """Return a singleton AsyncOpenAI client.
-
-    Returns:
-        Configured AsyncOpenAI instance.
-    """
+def _get_client() -> httpx.AsyncClient:
+    """Return a singleton async HTTP client for Ollama."""
     global _client
     if _client is None:
-        _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        _client = httpx.AsyncClient(base_url=settings.OLLAMA_URL, timeout=120.0)
     return _client
 
 
@@ -82,19 +78,7 @@ async def _get_conversation_history(
     conversation_id: int,
     max_messages: int = 10,
 ) -> list[dict]:
-    """Fetch the most recent messages for a conversation as chat-completion dicts.
-
-    Messages are returned in chronological order (oldest first) so the model
-    receives correct temporal context.
-
-    Args:
-        db: Active async database session.
-        conversation_id: The target conversation.
-        max_messages: How many recent messages to include (default 10).
-
-    Returns:
-        List of ``{"role": ..., "content": ...}`` dicts.
-    """
+    """Fetch the most recent messages for a conversation as chat dicts."""
     result = await db.execute(
         select(Message)
         .where(Message.conversation_id == conversation_id)
@@ -111,33 +95,17 @@ async def _get_conversation_history(
 
 
 def _extract_confidence(ai_text: str) -> tuple[str, float]:
-    """Extract ``[confidence: X.X]`` tag from AI response text.
-
-    Args:
-        ai_text: Raw text returned by the LLM, potentially containing a
-            ``[confidence: 0.0]``-style tag.
-
-    Returns:
-        Tuple of (cleaned_text, confidence_score).  If no tag is found the
-        original text is returned with a default confidence of 0.5.
-    """
+    """Extract ``[confidence: X.X]`` tag from AI response text."""
     match = re.search(r"\[confidence:\s*(-?[\d.]+)\]", ai_text)
     if match:
         confidence = min(1.0, max(0.0, float(match.group(1))))
         cleaned = re.sub(r"\s*\[confidence:\s*[\d.]+\]", "", ai_text).strip()
         return cleaned, confidence
-    return ai_text, 0.5  # default medium confidence
+    return ai_text, 0.5
 
 
 def _check_escalation_keywords(text: str) -> bool:
-    """Return True if the customer message contains any escalation keyword.
-
-    Args:
-        text: Customer-supplied message text.
-
-    Returns:
-        True when at least one keyword from :data:`ESCALATION_KEYWORDS` is found.
-    """
+    """Return True if the customer message contains any escalation keyword."""
     text_lower = text.lower()
     return any(kw in text_lower for kw in ESCALATION_KEYWORDS)
 
@@ -146,18 +114,7 @@ async def _count_low_confidence_streak(
     db: AsyncSession,
     conversation_id: int,
 ) -> int:
-    """Count consecutive AI messages with confidence below the escalation threshold.
-
-    Counts from the most recent AI message backwards, stopping as soon as a
-    message meets or exceeds the threshold.
-
-    Args:
-        db: Active async database session.
-        conversation_id: The target conversation.
-
-    Returns:
-        Number of consecutive low-confidence AI messages (may be 0).
-    """
+    """Count consecutive AI messages with confidence below the escalation threshold."""
     result = await db.execute(
         select(Message)
         .where(
@@ -187,34 +144,7 @@ async def generate_ai_response(
     conversation_id: int,
     customer_text: str,
 ) -> tuple[Message, bool]:
-    """Generate an AI response using the RAG pipeline.
-
-    Pipeline steps:
-    1. Persist the incoming customer message.
-    2. Check for keyword-based escalation triggers.
-    3. Retrieve relevant KB articles via pgvector similarity search.
-    4. Build the system prompt with retrieved context.
-    5. Fetch recent conversation history.
-    6. Call OpenAI GPT to generate a response.
-    7. Extract the confidence score embedded in the model's output.
-    8. Optionally boost confidence when a highly-similar KB article was found.
-    9. Determine whether to escalate (keyword match, very low confidence, or
-       repeated low-confidence streak).
-    10. Persist the AI message with the extracted confidence value.
-    11. If escalating: create an EscalationEvent and add a SYSTEM message.
-
-    Args:
-        db: Active async database session.  The caller is responsible for
-            committing or rolling back the transaction.
-        conversation_id: The conversation this exchange belongs to.
-        customer_text: The customer's message text.
-
-    Returns:
-        Tuple of ``(ai_message, escalated)`` where ``ai_message`` is the
-        persisted :class:`~app.models.message.Message` instance and
-        ``escalated`` is a boolean flag indicating whether the conversation
-        was promoted to ESCALATED status.
-    """
+    """Generate an AI response using the Ollama + RAG pipeline."""
     # 1. Persist customer message
     customer_msg = Message(
         conversation_id=conversation_id,
@@ -246,18 +176,27 @@ async def generate_ai_response(
         {"role": "user", "content": customer_text},
     ]
 
-    # 6. Call OpenAI
+    # 6. Call Ollama
     try:
         client = _get_client()
-        completion = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=messages,  # type: ignore[arg-type]
-            max_tokens=500,
-            temperature=0.7,
+        response = await client.post(
+            "/api/chat",
+            json={
+                "model": settings.OLLAMA_CHAT_MODEL,
+                "messages": messages,
+                "stream": False,
+                "keep_alive": "10m",
+                "options": {
+                    "num_predict": 500,
+                    "temperature": 0.7,
+                },
+            },
         )
-        raw_text: str = completion.choices[0].message.content or ""
+        response.raise_for_status()
+        data = response.json()
+        raw_text: str = data["message"]["content"]
     except Exception as e:
-        logger.error("OpenAI API error for conversation %d: %s", conversation_id, e)
+        logger.error("Ollama API error for conversation %d: %s", conversation_id, e)
         raw_text = (
             "죄송합니다, 일시적인 오류가 발생했습니다. "
             "잠시 후 다시 시도해 주세요. [confidence: 0.0]"
@@ -279,12 +218,9 @@ async def generate_ai_response(
         escalation_reason = "고객이 상담사 연결을 요청했습니다"
     elif confidence < settings.CONFIDENCE_ESCALATE_THRESHOLD:
         if confidence < 0.3:
-            # Immediately escalate on very low confidence
             should_escalate = True
             escalation_reason = f"AI 신뢰도가 매우 낮음: {confidence:.2f}"
         else:
-            # Escalate when the streak reaches the configured maximum.
-            # Subtract 1 because the current AI message has not been saved yet.
             streak = await _count_low_confidence_streak(db, conversation_id)
             if streak >= settings.MAX_LOW_CONFIDENCE_STREAK - 1:
                 should_escalate = True

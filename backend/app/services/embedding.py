@@ -1,55 +1,51 @@
-"""Embedding service — generates vector embeddings via OpenAI."""
+"""Embedding service — generates vector embeddings via local Ollama."""
 
 from __future__ import annotations
 
 import logging
 
-from openai import AsyncOpenAI
+import httpx
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_client: AsyncOpenAI | None = None
+_client: httpx.AsyncClient | None = None
 
 
-def _get_client() -> AsyncOpenAI:
-    """Return a singleton AsyncOpenAI client.
-
-    Returns:
-        Configured AsyncOpenAI instance.
-    """
+def _get_client() -> httpx.AsyncClient:
+    """Return a singleton async HTTP client for Ollama."""
     global _client
     if _client is None:
-        _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        _client = httpx.AsyncClient(base_url=settings.OLLAMA_URL, timeout=60.0)
     return _client
 
 
 async def generate_embedding(text: str) -> list[float]:
-    """Generate embedding vector for text using text-embedding-3-small (1536 dims).
+    """Generate embedding vector for text using Ollama bge-m3 (1024 dims).
 
     Args:
         text: Input text to embed.
 
     Returns:
-        List of 1536 float values representing the embedding vector.
-
-    Raises:
-        openai.APIError: If the OpenAI API call fails.
+        List of float values representing the embedding vector.
     """
     client = _get_client()
-    response = await client.embeddings.create(
-        model=settings.EMBEDDING_MODEL,
-        input=text,
+    response = await client.post(
+        "/api/embed",
+        json={
+            "model": settings.OLLAMA_EMBED_MODEL,
+            "input": text,
+            "keep_alive": "10m",
+        },
     )
-    return response.data[0].embedding
+    response.raise_for_status()
+    data = response.json()
+    return data["embeddings"][0]
 
 
 async def generate_embeddings_batch(texts: list[str]) -> list[list[float]]:
-    """Generate embeddings for multiple texts in one API call.
-
-    Ordering of returned embeddings matches the input order, regardless of
-    the order OpenAI returns them.
+    """Generate embeddings for multiple texts.
 
     Args:
         texts: List of input strings to embed.
@@ -60,8 +56,14 @@ async def generate_embeddings_batch(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
     client = _get_client()
-    response = await client.embeddings.create(
-        model=settings.EMBEDDING_MODEL,
-        input=texts,
+    response = await client.post(
+        "/api/embed",
+        json={
+            "model": settings.OLLAMA_EMBED_MODEL,
+            "input": texts,
+            "keep_alive": "10m",
+        },
     )
-    return [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
+    response.raise_for_status()
+    data = response.json()
+    return data["embeddings"]

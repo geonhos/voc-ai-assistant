@@ -1,5 +1,6 @@
 .PHONY: help setup up down restart logs logs-backend logs-frontend \
        db-up db-migrate db-seed db-reset \
+       ollama-up ollama-pull \
        backend-dev frontend-dev dev \
        test test-backend lint clean
 
@@ -16,28 +17,44 @@ setup: ## 최초 환경 설정 (.env 복사 + 의존성 설치)
 	@echo "✅ 설정 완료. 'make dev' 또는 'make up' 으로 시작하세요."
 
 # ─── Docker Compose ────────────────────────────────────
-up: ## Docker 전체 기동 (DB + Backend + Frontend)
-	docker-compose up -d --build
+up: ## Docker 전체 기동 (DB + Ollama + Backend + Frontend)
+	docker compose up -d --build
+	@echo "⏳ Ollama 모델 다운로드 (최초 1회)..."
+	$(MAKE) ollama-pull
 	@echo "✅ http://localhost:3000 (Frontend) | http://localhost:8000/docs (API)"
 
 down: ## Docker 전체 종료
-	docker-compose down
+	docker compose down
 
 restart: ## Docker 재시작
-	docker-compose down && docker-compose up -d --build
+	docker compose down && docker compose up -d --build
+	$(MAKE) ollama-pull
 
 logs: ## Docker 전체 로그 (follow)
-	docker-compose logs -f
+	docker compose logs -f
 
 logs-backend: ## Backend 로그만
-	docker-compose logs -f backend
+	docker compose logs -f backend
 
 logs-frontend: ## Frontend 로그만
-	docker-compose logs -f frontend
+	docker compose logs -f frontend
+
+logs-ollama: ## Ollama 로그만
+	docker compose logs -f ollama
+
+# ─── Ollama ──────────────────────────────────────────
+ollama-up: ## Ollama만 기동
+	docker compose up -d ollama
+	@echo "✅ Ollama: localhost:11434"
+
+ollama-pull: ## Ollama 모델 다운로드 (qwen2.5:7b + bge-m3)
+	docker compose exec ollama ollama pull qwen2.5:7b
+	docker compose exec ollama ollama pull bge-m3
+	@echo "✅ 모델 다운로드 완료"
 
 # ─── 데이터베이스 ──────────────────────────────────────
 db-up: ## PostgreSQL만 기동
-	docker-compose up -d db
+	docker compose up -d db
 	@echo "✅ PostgreSQL: localhost:5432"
 
 db-migrate: ## Alembic 마이그레이션 실행
@@ -47,8 +64,8 @@ db-seed: ## 시드 데이터 삽입 (관리자 + KB 문서)
 	cd backend && .venv/bin/python -m scripts.seed
 
 db-reset: ## DB 초기화 (볼륨 삭제 후 재생성)
-	docker-compose down -v
-	docker-compose up -d db
+	docker compose down -v
+	docker compose up -d db
 	@echo "⏳ DB 기동 대기..."
 	@sleep 3
 	$(MAKE) db-migrate db-seed
@@ -60,7 +77,7 @@ backend-dev: ## Backend 로컬 실행 (uvicorn --reload)
 frontend-dev: ## Frontend 로컬 실행 (next dev)
 	cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1 npm run dev
 
-dev: db-up ## DB 기동 + Backend & Frontend 동시 실행
+dev: db-up ollama-up ## DB + Ollama 기동 + Backend & Frontend 동시 실행
 	@echo "🚀 Backend: http://localhost:8000 | Frontend: http://localhost:3000"
 	@trap 'kill %1 %2 2>/dev/null' EXIT; \
 		$(MAKE) backend-dev & \
