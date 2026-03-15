@@ -1,12 +1,12 @@
 """Pydantic schemas for authentication endpoints."""
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class LoginRequest(BaseModel):
     """Request body for POST /api/v1/auth/login."""
 
-    email: EmailStr
+    email: str
     password: str
 
 

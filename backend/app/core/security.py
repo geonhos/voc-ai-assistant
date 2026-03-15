@@ -3,37 +3,20 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
-    """Hash a plain-text password using bcrypt.
-
-    Args:
-        password: The plain-text password to hash.
-
-    Returns:
-        The bcrypt-hashed password string.
-    """
-    return _pwd_context.hash(password)
+    """Hash a plain-text password using bcrypt."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plain-text password against its bcrypt hash.
-
-    Args:
-        plain: The plain-text password to verify.
-        hashed: The stored bcrypt hash.
-
-    Returns:
-        True if the password matches, False otherwise.
-    """
-    return _pwd_context.verify(plain, hashed)
+    """Verify a plain-text password against its bcrypt hash."""
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def create_access_token(data: dict[str, Any]) -> str:

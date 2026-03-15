@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 # Seed data
 # ---------------------------------------------------------------------------
 
-ADMIN_EMAIL = "admin@voc.ai"
-ADMIN_PASSWORD = "admin123"
+ADMIN_EMAIL = "admin"
+ADMIN_PASSWORD = "1234"
 
 ARTICLES: list[dict] = [
     {
