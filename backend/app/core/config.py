@@ -1,6 +1,13 @@
 """Application configuration loaded from environment variables."""
 
+import logging
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+_INSECURE_JWT_DEFAULTS = {"your-secret-key-change-in-production", "change-this-to-a-random-secret-key"}
 
 
 class Settings(BaseSettings):
@@ -25,6 +32,15 @@ class Settings(BaseSettings):
     MAX_LOW_CONFIDENCE_STREAK: int = 3
 
     model_config = SettingsConfigDict(env_file=".env")
+
+    @model_validator(mode="after")
+    def _validate_secrets(self) -> "Settings":
+        if self.JWT_SECRET_KEY in _INSECURE_JWT_DEFAULTS:
+            logger.warning(
+                "⚠️  JWT_SECRET_KEY is using an insecure default! "
+                "Set a secure random value via environment variable."
+            )
+        return self
 
 
 settings = Settings()

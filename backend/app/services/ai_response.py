@@ -99,7 +99,7 @@ def _extract_confidence(ai_text: str) -> tuple[str, float]:
     match = re.search(r"\[confidence:\s*(-?[\d.]+)\]", ai_text)
     if match:
         confidence = min(1.0, max(0.0, float(match.group(1))))
-        cleaned = re.sub(r"\s*\[confidence:\s*[\d.]+\]", "", ai_text).strip()
+        cleaned = re.sub(r"\s*\[confidence:\s*-?[\d.]+\]", "", ai_text).strip()
         return cleaned, confidence
     return ai_text, 0.5
 
