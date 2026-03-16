@@ -22,8 +22,9 @@ class Conversation(BaseModel):
     access_token: Mapped[str] = mapped_column(
         String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False
     )
-    customer_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    customer_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    customer_name: Mapped[str] = mapped_column(String(100), default="", nullable=False)
+    customer_email: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    customer_phone: Mapped[str] = mapped_column(String(20), default="", nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="OPEN", nullable=False)
     topic: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(

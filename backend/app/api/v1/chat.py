@@ -6,7 +6,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.schemas.conversation import ConversationCreate, ConversationResponse
+from app.schemas.conversation import ContactInfoUpdate, ConversationCreate, ConversationResponse
 from app.schemas.message import ChatRequest, ChatResponse, MessageResponse
 from app.services import ai_response as ai_service
 from app.services import conversation as conv_service
@@ -111,3 +111,31 @@ async def get_messages(
         )
 
     return [MessageResponse.model_validate(m) for m in conversation.messages]
+
+
+@router.patch(
+    "/conversations/{conversation_id}/contact",
+    response_model=ConversationResponse,
+    summary="Update customer contact info (on escalation)",
+)
+async def update_contact(
+    conversation_id: int,
+    payload: ContactInfoUpdate,
+    db: AsyncSession = Depends(get_db),
+    x_conversation_token: str = Header(..., description="Conversation access token"),
+) -> ConversationResponse:
+    """Submit customer contact info when escalation occurs."""
+    conversation = await conv_service.update_contact_info(
+        db,
+        conversation_id,
+        x_conversation_token,
+        customer_name=payload.customer_name,
+        customer_email=payload.customer_email,
+        customer_phone=payload.customer_phone,
+    )
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found",
+        )
+    return ConversationResponse.model_validate(conversation)

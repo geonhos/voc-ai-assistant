@@ -12,11 +12,17 @@ ConversationStatus = Literal["OPEN", "ESCALATED", "RESOLVED"]
 
 
 class ConversationCreate(BaseModel):
-    """Payload to create a new conversation (customer-initiated)."""
+    """Payload to create a new conversation — only initial message required."""
+
+    initial_message: str
+
+
+class ContactInfoUpdate(BaseModel):
+    """Payload to update customer contact info (on escalation)."""
 
     customer_name: str
     customer_email: EmailStr
-    initial_message: str
+    customer_phone: str = ""
 
 
 class ConversationResponse(BaseModel):
@@ -26,6 +32,7 @@ class ConversationResponse(BaseModel):
     access_token: str
     customer_name: str
     customer_email: str
+    customer_phone: str
     status: str
     topic: str | None
     resolved_at: datetime | None

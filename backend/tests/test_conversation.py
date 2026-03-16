@@ -13,20 +13,17 @@ from app.services.conversation import (
 
 @pytest.mark.asyncio
 async def test_create_conversation_sets_status_open():
-    """New conversations should have OPEN status."""
+    """New anonymous conversations should have OPEN status."""
     mock_db = MagicMock()
     mock_db.flush = AsyncMock()
 
     payload = MagicMock()
-    payload.customer_name = "홍길동"
-    payload.customer_email = "hong@test.com"
     payload.initial_message = "배송 문의입니다"
 
     conversation = await create_conversation(mock_db, payload)
 
     assert conversation.status == "OPEN"
-    assert conversation.customer_name == "홍길동"
-    assert conversation.customer_email == "hong@test.com"
+    assert conversation.topic == "배송 문의입니다"
     assert mock_db.add.call_count == 2  # conversation + initial message
 
 
@@ -38,8 +35,6 @@ async def test_create_conversation_truncates_topic():
 
     long_message = "A" * 500
     payload = MagicMock()
-    payload.customer_name = "테스트"
-    payload.customer_email = "test@test.com"
     payload.initial_message = long_message
 
     conversation = await create_conversation(mock_db, payload)

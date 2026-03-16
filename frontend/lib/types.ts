@@ -55,6 +55,7 @@ export interface CreateConversationResponse {
   access_token: string;
   customer_name: string;
   customer_email: string;
+  customer_phone: string;
   status: ConversationStatus;
   created_at: string;
 }

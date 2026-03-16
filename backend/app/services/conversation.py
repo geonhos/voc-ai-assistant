@@ -15,18 +15,11 @@ async def create_conversation(
     db: AsyncSession,
     payload: ConversationCreate,
 ) -> Conversation:
-    """Create a new conversation with an initial customer message.
+    """Create a new anonymous conversation with an initial customer message.
 
-    Args:
-        db: Active async database session.
-        payload: Conversation creation data.
-
-    Returns:
-        The newly created Conversation instance.
+    Customer contact info is collected later when escalation occurs.
     """
     conversation = Conversation(
-        customer_name=payload.customer_name,
-        customer_email=payload.customer_email,
         topic=payload.initial_message[:200],
         status="OPEN",
     )
@@ -41,6 +34,35 @@ async def create_conversation(
     db.add(initial_message)
     await db.flush()
 
+    return conversation
+
+
+async def update_contact_info(
+    db: AsyncSession,
+    conversation_id: int,
+    access_token: str,
+    customer_name: str,
+    customer_email: str,
+    customer_phone: str = "",
+) -> Conversation | None:
+    """Update customer contact info for a conversation (on escalation).
+
+    Returns None if conversation not found or token mismatch.
+    """
+    result = await db.execute(
+        select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.access_token == access_token,
+        )
+    )
+    conversation = result.scalar_one_or_none()
+    if conversation is None:
+        return None
+
+    conversation.customer_name = customer_name
+    conversation.customer_email = customer_email
+    conversation.customer_phone = customer_phone
+    await db.flush()
     return conversation
 
 
