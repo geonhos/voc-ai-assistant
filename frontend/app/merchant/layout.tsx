@@ -150,6 +150,13 @@ function MerchantProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 export default function MerchantLayout({ children }: MerchantLayoutProps) {
+  const pathname = usePathname();
+
+  // Login page should not be wrapped in the protected route
+  if (pathname === '/merchant/login') {
+    return <>{children}</>;
+  }
+
   return (
     <MerchantProtectedRoute>
       <div className="flex min-h-screen bg-[var(--color-neutral-50)]">

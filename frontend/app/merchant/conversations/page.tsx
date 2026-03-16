@@ -135,7 +135,7 @@ export default function MerchantConversationsPage() {
                       <StatusBadge status={conv.status} />
                     </div>
                     <p className="text-xs text-[var(--color-neutral-500)]">
-                      메시지 {conv.message_count}건 · {formatDate(conv.updated_at)}
+                      {formatDate(conv.updated_at || conv.created_at)}
                     </p>
                   </div>
 
