@@ -143,6 +143,98 @@ async def list_conversations(
     return conversations, total
 
 
+async def create_merchant_conversation(
+    db: AsyncSession,
+    merchant_id: int | None,
+    customer_email: str,
+) -> Conversation:
+    """Create a new conversation scoped to a specific merchant.
+
+    The ``customer_name`` and ``customer_email`` fields are populated from the
+    authenticated merchant user so the record is immediately identifiable.
+
+    Args:
+        db: Active async database session.
+        merchant_id: The merchant's database ID (from the JWT principal).
+        customer_email: Email of the authenticated merchant user.
+
+    Returns:
+        The newly created Conversation instance.
+    """
+    conversation = Conversation(
+        merchant_id=merchant_id,
+        customer_name=customer_email,
+        customer_email=customer_email,
+        status="OPEN",
+    )
+    db.add(conversation)
+    await db.flush()
+    await db.refresh(conversation)
+    return conversation
+
+
+async def get_merchant_conversation(
+    db: AsyncSession,
+    conversation_id: int,
+    merchant_id: int | None,
+) -> Conversation | None:
+    """Fetch a merchant-scoped conversation with its messages eagerly loaded.
+
+    Verifies that the conversation belongs to ``merchant_id`` — returns None
+    when the conversation is not found or the ownership check fails.
+
+    Args:
+        db: Active async database session.
+        conversation_id: Primary key of the conversation.
+        merchant_id: The merchant's database ID (from the JWT principal).
+
+    Returns:
+        The Conversation instance or None if not found / ownership mismatch.
+    """
+    result = await db.execute(
+        select(Conversation)
+        .options(selectinload(Conversation.messages))
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.merchant_id == merchant_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def list_merchant_conversations(
+    db: AsyncSession,
+    merchant_id: int | None,
+    skip: int = 0,
+    limit: int = 20,
+    status: str | None = None,
+) -> list[Conversation]:
+    """List conversations owned by a merchant with optional status filtering.
+
+    Args:
+        db: Active async database session.
+        merchant_id: The merchant's database ID (from the JWT principal).
+        skip: Number of records to skip (pagination offset).
+        limit: Maximum number of records to return.
+        status: Optional status filter — OPEN | ESCALATED | RESOLVED.
+
+    Returns:
+        List of Conversation instances ordered by creation time (newest first).
+    """
+    query = (
+        select(Conversation)
+        .where(Conversation.merchant_id == merchant_id)
+    )
+
+    if status:
+        query = query.where(Conversation.status == status)
+
+    query = query.order_by(Conversation.created_at.desc()).offset(skip).limit(limit)
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
 async def update_conversation_status(
     db: AsyncSession,
     conversation_id: int,

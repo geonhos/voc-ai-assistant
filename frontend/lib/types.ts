@@ -3,12 +3,70 @@
 export type ConversationStatus = 'OPEN' | 'ESCALATED' | 'RESOLVED';
 export type MessageSender = 'AI' | 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
 
+// Tool data types for rich message rendering
+export interface ToolData {
+  display_type: 'transaction_card' | 'settlement_table' | 'error_code' | 'api_log' | 'text';
+  data: TransactionData | SettlementData | ErrorCodeData | ApiLogData | Record<string, unknown>;
+}
+
+export interface TransactionData {
+  tid: string;
+  amount: number;
+  payment_method: string;
+  card_company?: string;
+  card_number_masked?: string;
+  status: string;
+  error_code?: string;
+  error_message?: string;
+  customer_name?: string;
+  order_id?: string;
+  approved_at?: string;
+  cancelled_at?: string;
+  created_at: string;
+}
+
+export interface SettlementData {
+  settlement_date: string;
+  total_amount: number;
+  fee_amount: number;
+  net_amount: number;
+  transaction_count: number;
+  status: string;
+}
+
+export interface ErrorCodeData {
+  code: string;
+  category: string;
+  description: string;
+  solution: string;
+  severity: string;
+}
+
+export interface ApiLogData {
+  endpoint: string;
+  method: string;
+  status_code: number;
+  error_code?: string;
+  error_message?: string;
+  latency_ms: number;
+  created_at: string;
+}
+
+export interface MerchantUser {
+  id: number;
+  email: string;
+  role: 'MERCHANT' | 'ADMIN';
+  merchant_id: number;
+}
+
 export interface Message {
   id: number;
   conversation_id: number;
   sender: MessageSender;
   text: string;
   confidence?: number;
+  tool_name?: string;
+  tool_data?: ToolData;
   created_at: string;
 }
 

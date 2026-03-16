@@ -1,12 +1,17 @@
 'use client';
 
-import type { MessageSender } from '@/lib/types';
+import type { MessageSender, ToolData, TransactionData, SettlementData, ErrorCodeData, ApiLogData } from '@/lib/types';
+import { TransactionCard } from './TransactionCard';
+import { SettlementTable } from './SettlementTable';
+import { ErrorCodeInfo } from './ErrorCodeInfo';
+import { ApiLogTable } from './ApiLogTable';
 
 interface MessageBubbleProps {
   sender: MessageSender;
   text: string;
   timestamp: string;
   confidence?: number;
+  toolData?: ToolData;
 }
 
 function formatTime(timestamp: string): string {
@@ -20,7 +25,26 @@ function formatTime(timestamp: string): string {
   }
 }
 
-export function MessageBubble({ sender, text, timestamp, confidence }: MessageBubbleProps) {
+function ToolDataRenderer({ toolData }: { toolData: ToolData }) {
+  return (
+    <div className="mt-2">
+      {toolData.display_type === 'transaction_card' && (
+        <TransactionCard data={toolData.data as TransactionData} />
+      )}
+      {toolData.display_type === 'settlement_table' && (
+        <SettlementTable data={toolData.data as SettlementData} />
+      )}
+      {toolData.display_type === 'error_code' && (
+        <ErrorCodeInfo data={toolData.data as ErrorCodeData} />
+      )}
+      {toolData.display_type === 'api_log' && (
+        <ApiLogTable data={toolData.data as ApiLogData} />
+      )}
+    </div>
+  );
+}
+
+export function MessageBubble({ sender, text, timestamp, confidence, toolData }: MessageBubbleProps) {
   if (sender === 'SYSTEM') {
     return (
       <div className="flex items-center gap-3 my-4">
@@ -85,6 +109,7 @@ export function MessageBubble({ sender, text, timestamp, confidence }: MessageBu
         </div>
         <div className="bg-white border border-[var(--color-neutral-200)] text-[var(--color-neutral-900)] rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm">
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+          {toolData && <ToolDataRenderer toolData={toolData} />}
         </div>
         <p className="text-[11px] text-[var(--color-neutral-500)] mt-1">
           {formatTime(timestamp)}

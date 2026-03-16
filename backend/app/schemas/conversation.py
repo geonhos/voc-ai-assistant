@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr
 
@@ -30,6 +30,7 @@ class ConversationResponse(BaseModel):
 
     id: int
     access_token: str
+    merchant_id: Optional[int] = None
     customer_name: str
     customer_email: str
     customer_phone: str
