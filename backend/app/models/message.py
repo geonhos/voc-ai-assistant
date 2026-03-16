@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -22,6 +23,9 @@ class Message(BaseModel):
     sender: Mapped[str] = mapped_column(String(20), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Tool-use pipeline fields (Phase 2)
+    tool_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    tool_data: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     conversation: Mapped["Conversation"] = relationship(
         "Conversation",

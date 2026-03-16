@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -25,6 +25,8 @@ class MessageResponse(BaseModel):
     sender: str
     text: str
     confidence: float | None
+    tool_name: Optional[str] = None
+    tool_data: Optional[dict] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
