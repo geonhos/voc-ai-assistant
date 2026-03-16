@@ -59,6 +59,26 @@ export interface MerchantUser {
   merchant_id: number;
 }
 
+export type MerchantStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING' | 'TERMINATED';
+
+export interface Merchant {
+  id: number;
+  mid: string;
+  name: string;
+  business_number: string;
+  status: MerchantStatus;
+  settings: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface MerchantCreate {
+  mid: string;
+  name: string;
+  business_number: string;
+  settings?: Record<string, unknown>;
+}
+
 export interface Message {
   id: number;
   conversation_id: number;
