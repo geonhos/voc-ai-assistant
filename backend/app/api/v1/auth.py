@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jose import JWTError
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +20,7 @@ from app.core.security import (
 from app.models.user import User
 from app.schemas.auth import LoginRequest, MeResponse, RefreshRequest, TokenResponse
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -26,7 +29,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     response_model=TokenResponse,
     summary="Authenticate with email and password",
 )
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     payload: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:

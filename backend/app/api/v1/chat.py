@@ -1,6 +1,8 @@
 """Customer chat router — public-facing chat endpoints."""
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -10,6 +12,7 @@ from app.services import ai_response as ai_service
 from app.services import conversation as conv_service
 from app.services.notification import notify_escalation
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
@@ -19,7 +22,9 @@ router = APIRouter(prefix="/chat", tags=["chat"])
     status_code=status.HTTP_201_CREATED,
     summary="Start a new support conversation",
 )
+@limiter.limit("10/minute")
 async def start_conversation(
+    request: Request,
     payload: ConversationCreate,
     db: AsyncSession = Depends(get_db),
 ) -> ConversationResponse:
@@ -36,7 +41,9 @@ async def start_conversation(
     response_model=ChatResponse,
     summary="Send a message and receive an AI response",
 )
+@limiter.limit("20/minute")
 async def send_message(
+    request: Request,
     conversation_id: int,
     payload: ChatRequest,
     background_tasks: BackgroundTasks,
