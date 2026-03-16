@@ -67,24 +67,10 @@ export function useConversationDetailViewModel(id: string): ConversationDetailVi
   const updateStatus = useCallback(
     async (status: ConversationStatus) => {
       try {
-        // Use PATCH as per API spec
-        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/admin/conversations/${id}/status`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ status }),
-          },
+        const updated = await apiClient.patch<Conversation>(
+          `/admin/conversations/${id}/status`,
+          { status },
         );
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
-          throw new Error(err.detail || `HTTP ${res.status}`);
-        }
-        const updated: Conversation = await res.json();
         setConversation(updated);
       } catch (err) {
         const message = err instanceof Error ? err.message : '상태 변경에 실패했습니다.';

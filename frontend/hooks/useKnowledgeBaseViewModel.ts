@@ -133,23 +133,7 @@ export function useKnowledgeBaseViewModel(): KnowledgeBaseViewModel {
 
     try {
       if (editingItem) {
-        // Use PATCH as per API spec
-        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/knowledge/${editingItem.id}`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify(payload),
-          },
-        );
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
-          throw new Error(err.detail || `HTTP ${res.status}`);
-        }
+        await apiClient.patch(`/knowledge/${editingItem.id}`, payload);
       } else {
         await apiClient.post('/knowledge/', payload);
       }
@@ -165,21 +149,7 @@ export function useKnowledgeBaseViewModel(): KnowledgeBaseViewModel {
 
   const deleteItem = useCallback(async (id: number) => {
     try {
-      // DELETE returns 204 No Content — bypass apiClient's .json() call
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/knowledge/${id}`,
-        {
-          method: 'DELETE',
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        },
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
-      }
+      await apiClient.delete(`/knowledge/${id}`);
       setRefreshTick((t) => t + 1);
     } catch (err) {
       const message = err instanceof Error ? err.message : '삭제에 실패했습니다.';
