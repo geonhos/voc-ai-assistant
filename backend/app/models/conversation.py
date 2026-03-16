@@ -33,6 +33,9 @@ class Conversation(BaseModel):
     resolved_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True
     )
+    merchant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("merchants.id"), nullable=True, index=True
+    )
 
     messages: Mapped[List["Message"]] = relationship(
         "Message",

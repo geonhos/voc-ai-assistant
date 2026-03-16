@@ -17,8 +17,10 @@ from app.core.security import (
     verify_password,
     verify_token,
 )
+from app.models.merchant import Merchant
 from app.models.user import User
 from app.schemas.auth import LoginRequest, MeResponse, RefreshRequest, TokenResponse
+from app.schemas.merchant import MerchantLoginRequest
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -72,6 +74,61 @@ async def login(
 async def me(user: User = Depends(get_current_user)) -> MeResponse:
     """Return the currently authenticated user's profile."""
     return MeResponse(id=user.id, email=user.email, role=user.role)
+
+
+@router.post(
+    "/merchant/login",
+    response_model=TokenResponse,
+    summary="Authenticate a merchant with MID and password",
+)
+async def merchant_login(
+    request: Request,
+    payload: MerchantLoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Authenticate a merchant account using MID and password.
+
+    Args:
+        payload: Merchant login credentials (mid, password).
+        db: Active async database session.
+
+    Returns:
+        TokenResponse containing access_token, refresh_token, and token_type.
+
+    Raises:
+        HTTPException 401: If the MID or password is invalid.
+    """
+    merchant_result = await db.execute(
+        select(Merchant).where(Merchant.mid == payload.mid)
+    )
+    merchant = merchant_result.scalar_one_or_none()
+    if merchant is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid merchant ID or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_result = await db.execute(
+        select(User).where(User.merchant_id == merchant.id)
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid merchant ID or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_data = {
+        "sub": str(user.id),
+        "role": user.role,
+        "merchant_id": merchant.id,
+    }
+    return TokenResponse(
+        access_token=create_access_token(token_data),
+        refresh_token=create_refresh_token(token_data),
+    )
 
 
 @router.post(

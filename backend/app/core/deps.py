@@ -73,3 +73,29 @@ async def require_admin(
             detail="Administrator privileges required",
         )
     return user
+
+
+async def get_current_merchant_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Get the current user and verify they have MERCHANT or ADMIN role.
+
+    Args:
+        token: The JWT access token extracted from the Authorization header.
+        db: Active async database session.
+
+    Returns:
+        The authenticated User ORM instance with MERCHANT or ADMIN role.
+
+    Raises:
+        HTTPException 401: If the token is invalid or the user is not found.
+        HTTPException 403: If the user does not have MERCHANT or ADMIN role.
+    """
+    user = await get_current_user(token=token, db=db)
+    if user.role not in ("MERCHANT", "ADMIN"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Merchant access required",
+        )
+    return user
