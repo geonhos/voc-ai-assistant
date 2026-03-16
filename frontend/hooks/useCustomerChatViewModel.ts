@@ -106,31 +106,13 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
 
       // Auto-create conversation on first message
       if (convId === null) {
-        setIsLoading(true);
         const result = await ensureConversation(text.trim());
-        setIsLoading(false);
         if (!result) {
           setIsSending(false);
           return;
         }
         convId = result.id;
         headers = { 'X-Conversation-Token': result.token };
-
-        // Load initial messages (the first message is already created by the backend)
-        try {
-          const msgs = await apiClient.get<Message[]>(
-            `/chat/conversations/${convId}/messages`,
-            headers,
-          );
-          setMessages(msgs);
-          if (msgs.length > 0) {
-            lastMessageIdRef.current = msgs[msgs.length - 1].id;
-          }
-        } catch {
-          // ignore
-        }
-        setIsSending(false);
-        return;
       }
 
       // Optimistically add customer message

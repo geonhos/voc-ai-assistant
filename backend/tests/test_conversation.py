@@ -16,6 +16,7 @@ async def test_create_conversation_sets_status_open():
     """New anonymous conversations should have OPEN status."""
     mock_db = MagicMock()
     mock_db.flush = AsyncMock()
+    mock_db.refresh = AsyncMock()
 
     payload = MagicMock()
     payload.initial_message = "배송 문의입니다"
@@ -24,7 +25,7 @@ async def test_create_conversation_sets_status_open():
 
     assert conversation.status == "OPEN"
     assert conversation.topic == "배송 문의입니다"
-    assert mock_db.add.call_count == 2  # conversation + initial message
+    assert mock_db.add.call_count == 1  # conversation only
 
 
 @pytest.mark.asyncio
@@ -32,6 +33,7 @@ async def test_create_conversation_truncates_topic():
     """Topic should be truncated from initial_message to max 200 chars."""
     mock_db = MagicMock()
     mock_db.flush = AsyncMock()
+    mock_db.refresh = AsyncMock()
 
     long_message = "A" * 500
     payload = MagicMock()

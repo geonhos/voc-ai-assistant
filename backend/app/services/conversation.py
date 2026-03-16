@@ -15,9 +15,10 @@ async def create_conversation(
     db: AsyncSession,
     payload: ConversationCreate,
 ) -> Conversation:
-    """Create a new anonymous conversation with an initial customer message.
+    """Create a new anonymous conversation.
 
-    Customer contact info is collected later when escalation occurs.
+    Only creates the conversation record. The first customer message
+    is sent via the /messages endpoint to trigger AI response.
     """
     conversation = Conversation(
         topic=payload.initial_message[:200],
@@ -25,14 +26,7 @@ async def create_conversation(
     )
     db.add(conversation)
     await db.flush()
-
-    initial_message = Message(
-        conversation_id=conversation.id,
-        sender="CUSTOMER",
-        text=payload.initial_message,
-    )
-    db.add(initial_message)
-    await db.flush()
+    await db.refresh(conversation)
 
     return conversation
 
@@ -63,6 +57,7 @@ async def update_contact_info(
     conversation.customer_email = customer_email
     conversation.customer_phone = customer_phone
     await db.flush()
+    await db.refresh(conversation)
     return conversation
 
 
