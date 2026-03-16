@@ -166,17 +166,17 @@ async def generate_ai_response(
     )
     context_str = format_context(rag_articles)
 
-    # 4 & 5. Build prompt messages
+    # 4 & 5. Build prompt messages (history already includes the just-flushed customer msg)
     system_message = SYSTEM_PROMPT.format(context=context_str)
     history = await _get_conversation_history(db, conversation_id)
 
     messages: list[dict] = [
         {"role": "system", "content": system_message},
         *history,
-        {"role": "user", "content": customer_text},
     ]
 
     # 6. Call Ollama
+    ollama_error = False
     try:
         client = _get_client()
         response = await client.post(
@@ -197,9 +197,10 @@ async def generate_ai_response(
         raw_text: str = data["message"]["content"]
     except Exception as e:
         logger.error("Ollama API error for conversation %d: %s", conversation_id, e)
+        ollama_error = True
         raw_text = (
             "죄송합니다, 일시적인 오류가 발생했습니다. "
-            "잠시 후 다시 시도해 주세요. [confidence: 0.0]"
+            "잠시 후 다시 시도해 주세요. [confidence: 0.5]"
         )
 
     # 7. Extract confidence from model output
@@ -209,14 +210,14 @@ async def generate_ai_response(
     if rag_articles and rag_articles[0].get("similarity", 0.0) > 0.7:
         confidence = min(1.0, confidence + 0.1)
 
-    # 9. Determine escalation
+    # 9. Determine escalation (skip for transient Ollama errors)
     should_escalate = False
     escalation_reason = ""
 
     if keyword_escalation:
         should_escalate = True
         escalation_reason = "고객이 상담사 연결을 요청했습니다"
-    elif confidence < settings.CONFIDENCE_ESCALATE_THRESHOLD:
+    elif not ollama_error and confidence < settings.CONFIDENCE_ESCALATE_THRESHOLD:
         if confidence < 0.3:
             should_escalate = True
             escalation_reason = f"AI 신뢰도가 매우 낮음: {confidence:.2f}"

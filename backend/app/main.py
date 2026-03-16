@@ -31,8 +31,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         Control back to the application while it is running.
     """
     logger.info("Starting VOC AI Assistant API...")
-    # Phase 1: Add DB table creation or migration trigger here if needed
     yield
+    # Cleanup httpx singleton clients on shutdown
+    import app.services.embedding as emb_mod
+    import app.services.ai_response as ai_mod
+    if emb_mod._client is not None:
+        await emb_mod._client.aclose()
+        emb_mod._client = None
+    if ai_mod._client is not None:
+        await ai_mod._client.aclose()
+        ai_mod._client = None
     logger.info("Shutting down VOC AI Assistant API...")
 
 
