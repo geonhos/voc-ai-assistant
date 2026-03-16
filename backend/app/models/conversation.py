@@ -1,5 +1,6 @@
 """Conversation ORM model."""
 
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
@@ -18,6 +19,9 @@ class Conversation(BaseModel):
 
     __tablename__ = "conversations"
 
+    access_token: Mapped[str] = mapped_column(
+        String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False
+    )
     customer_name: Mapped[str] = mapped_column(String(100), nullable=False)
     customer_email: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="OPEN", nullable=False)

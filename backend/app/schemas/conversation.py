@@ -23,6 +23,7 @@ class ConversationResponse(BaseModel):
     """Serialized conversation returned by the API."""
 
     id: int
+    access_token: str
     customer_name: str
     customer_email: str
     status: str

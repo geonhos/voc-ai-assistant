@@ -52,6 +52,7 @@ export interface KnowledgeItem {
 
 export interface CreateConversationResponse {
   id: number;
+  access_token: string;
   customer_name: string;
   customer_email: string;
   status: ConversationStatus;

@@ -42,11 +42,19 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMessageIdRef = useRef<number>(0);
+  const accessTokenRef = useRef<string | null>(null);
+
+  const getConvHeaders = useCallback(() => {
+    return accessTokenRef.current
+      ? { 'X-Conversation-Token': accessTokenRef.current }
+      : undefined;
+  }, []);
 
   const fetchMessages = useCallback(async (convId: number) => {
     try {
       const msgs = await apiClient.get<Message[]>(
         `/chat/conversations/${convId}/messages`,
+        getConvHeaders(),
       );
       if (msgs.length > 0) {
         const latest = msgs[msgs.length - 1];
@@ -58,10 +66,13 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
     } catch {
       // Silently ignore polling errors
     }
-  }, []);
+  }, [getConvHeaders]);
 
   useEffect(() => {
     if (conversationId === null) return;
+
+    // Stop polling if conversation is escalated
+    if (isEscalated) return;
 
     pollingRef.current = setInterval(() => {
       fetchMessages(conversationId);
@@ -72,7 +83,7 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
         clearInterval(pollingRef.current);
       }
     };
-  }, [conversationId, fetchMessages]);
+  }, [conversationId, isEscalated, fetchMessages]);
 
   const startConversation = useCallback(async () => {
     if (!customerName.trim()) {
@@ -102,10 +113,13 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
       );
 
       setConversationId(conversation.id);
+      accessTokenRef.current = conversation.access_token;
 
       // Load initial messages
+      const headers = { 'X-Conversation-Token': conversation.access_token };
       const msgs = await apiClient.get<Message[]>(
         `/chat/conversations/${conversation.id}/messages`,
+        headers,
       );
       setMessages(msgs);
       if (msgs.length > 0) {
@@ -140,11 +154,13 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
         const response = await apiClient.post<SendMessageResponse>(
           `/chat/conversations/${conversationId}/messages`,
           { text: text.trim() },
+          getConvHeaders(),
         );
 
         // Replace optimistic with real messages
         const msgs = await apiClient.get<Message[]>(
           `/chat/conversations/${conversationId}/messages`,
+          getConvHeaders(),
         );
         setMessages(msgs);
         if (msgs.length > 0) {
@@ -163,7 +179,7 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
         setIsSending(false);
       }
     },
-    [conversationId],
+    [conversationId, getConvHeaders],
   );
 
   return {

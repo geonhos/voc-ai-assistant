@@ -65,6 +65,32 @@ async def get_conversation(
     return result.scalar_one_or_none()
 
 
+async def get_conversation_by_token(
+    db: AsyncSession,
+    conversation_id: int,
+    access_token: str,
+) -> Conversation | None:
+    """Fetch a conversation only if the access_token matches (customer auth).
+
+    Args:
+        db: Active async database session.
+        conversation_id: Primary key of the conversation.
+        access_token: UUID token issued at conversation creation.
+
+    Returns:
+        The Conversation instance or None if not found / token mismatch.
+    """
+    result = await db.execute(
+        select(Conversation)
+        .options(selectinload(Conversation.messages))
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.access_token == access_token,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_conversations(
     db: AsyncSession,
     skip: int = 0,

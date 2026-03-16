@@ -1,6 +1,6 @@
 """Customer chat router — public-facing chat endpoints."""
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -25,12 +25,7 @@ async def start_conversation(
 ) -> ConversationResponse:
     """Create a new conversation with an initial customer message.
 
-    Args:
-        payload: Customer details and the first message.
-        db: Active async database session.
-
-    Returns:
-        The newly created Conversation.
+    Returns ConversationResponse including access_token for subsequent requests.
     """
     conversation = await conv_service.create_conversation(db, payload)
     return ConversationResponse.model_validate(conversation)
@@ -46,26 +41,25 @@ async def send_message(
     payload: ChatRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    x_conversation_token: str = Header(..., description="Conversation access token"),
 ) -> ChatResponse:
     """Submit a customer message and receive an AI-generated reply.
 
-    Args:
-        conversation_id: ID of the active conversation.
-        payload: Contains the customer's message text.
-        background_tasks: FastAPI background task runner.
-        db: Active async database session.
-
-    Returns:
-        ChatResponse with the AI message and an escalation flag.
-
-    Raises:
-        HTTPException 404: If the conversation does not exist.
+    Requires X-Conversation-Token header for customer authentication.
     """
-    conversation = await conv_service.get_conversation(db, conversation_id)
+    conversation = await conv_service.get_conversation_by_token(
+        db, conversation_id, x_conversation_token
+    )
     if conversation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Conversation {conversation_id} not found",
+        )
+
+    if conversation.status != "OPEN":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Conversation is {conversation.status}. Cannot send new messages.",
         )
 
     ai_message, escalated = await ai_service.generate_ai_response(
@@ -94,20 +88,15 @@ async def send_message(
 async def get_messages(
     conversation_id: int,
     db: AsyncSession = Depends(get_db),
+    x_conversation_token: str = Header(..., description="Conversation access token"),
 ) -> list[MessageResponse]:
     """Fetch all messages in a conversation.
 
-    Args:
-        conversation_id: ID of the conversation.
-        db: Active async database session.
-
-    Returns:
-        Ordered list of messages.
-
-    Raises:
-        HTTPException 404: If the conversation does not exist.
+    Requires X-Conversation-Token header for customer authentication.
     """
-    conversation = await conv_service.get_conversation(db, conversation_id)
+    conversation = await conv_service.get_conversation_by_token(
+        db, conversation_id, x_conversation_token
+    )
     if conversation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
