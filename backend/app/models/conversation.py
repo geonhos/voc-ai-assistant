@@ -37,6 +37,9 @@ class Conversation(BaseModel):
     merchant_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("merchants.id"), nullable=True, index=True
     )
+    customer_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True, index=True
+    )
     clarification_state: Mapped[Optional[dict]] = mapped_column(
         JSONB, nullable=True
     )

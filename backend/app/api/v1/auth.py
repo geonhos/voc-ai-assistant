@@ -177,3 +177,33 @@ async def refresh(
         access_token=create_access_token(token_data),
         refresh_token=create_refresh_token(token_data),
     )
+
+
+@router.post(
+    "/customer/login",
+    response_model=TokenResponse,
+    summary="Authenticate a customer with email and password",
+)
+@limiter.limit("5/minute")
+async def customer_login(
+    request: Request,
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Authenticate a customer account using email and password."""
+    result = await db.execute(
+        select(User).where(User.email == payload.email, User.role == "CUSTOMER")
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_data = {"sub": str(user.id), "role": user.role}
+    return TokenResponse(
+        access_token=create_access_token(token_data),
+        refresh_token=create_refresh_token(token_data),
+    )

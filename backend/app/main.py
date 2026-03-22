@@ -11,7 +11,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api.v1 import auth, chat, admin, knowledge, merchant_admin, merchant_chat
+from app.api.v1 import auth, chat, admin, knowledge, merchant_admin, merchant_chat, customer_chat
 from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
@@ -82,6 +82,7 @@ app.include_router(admin.router, prefix=API_V1_PREFIX)
 app.include_router(knowledge.router, prefix=API_V1_PREFIX)
 app.include_router(merchant_admin.router, prefix=API_V1_PREFIX)
 app.include_router(merchant_chat.router, prefix=API_V1_PREFIX)
+app.include_router(customer_chat.router, prefix=API_V1_PREFIX)
 
 # ---------------------------------------------------------------------------
 # Global exception handlers
