@@ -521,7 +521,7 @@ async def generate_merchant_ai_response(
 
         assessment = await assess_completeness(customer_text, first_intent, chat_history)
 
-        if not assessment.is_complete and assessment.confidence < 0.5:
+        if not assessment.is_complete:
             logger.info(
                 "Conv %d: query incomplete (score=%.2f) — starting clarification flow",
                 conversation_id,

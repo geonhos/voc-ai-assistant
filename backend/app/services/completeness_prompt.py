@@ -43,9 +43,24 @@ COMPLETENESS_ASSESSMENT_PROMPT = """당신은 B2B PG(결제대행) 가맹점 지
 사용자: "결제가 안 돼요"
 → {{"confidence": 0.3, "missing_fields": ["거래번호", "결제수단", "발생시점"], "questions": ["거래번호(TID)를 알고 계신가요?", "어떤 결제 수단을 사용하셨나요?", "언제 발생한 문제인가요?"], "quick_options": [["모름", "확인 중"], ["카드결제", "계좌이체", "가상계좌", "모바일"], ["오늘", "어제", "이번 주"]]}}
 
+사용자: "API 연동 실패 문의할게"
+→ {{"confidence": 0.3, "missing_fields": ["엔드포인트", "에러메시지", "발생시점"], "questions": ["어떤 API 엔드포인트에서 실패하셨나요?", "에러 메시지나 에러 코드가 있나요?", "언제부터 발생한 문제인가요?"], "quick_options": [["결제 API", "정산 API", "취소 API", "조회 API"], ["모름", "확인 중"], ["오늘", "어제", "이번 주"]]}}
+
+사용자: "정산 확인해줘"
+→ {{"confidence": 0.6, "missing_fields": ["정산월"], "questions": ["몇 월 정산을 확인하시겠어요?"], "quick_options": [["이번 달", "지난 달", "직접 입력"]]}}
+
+사용자: "거래 조회해 주세요"
+→ {{"confidence": 0.3, "missing_fields": ["거래번호", "조회조건"], "questions": ["거래번호(TID)를 알고 계신가요?", "어떤 조건으로 조회하시겠어요?"], "quick_options": [["TID로 조회", "모름"], ["오늘 거래", "어제 거래", "기간 지정"]]}}
+
+사용자: "에러가 나요"
+→ {{"confidence": 0.2, "missing_fields": ["에러코드", "발생상황", "발생시점"], "questions": ["어떤 에러 코드가 표시되나요?", "어떤 상황에서 에러가 발생하나요?"], "quick_options": [["모름", "확인 중"], ["결제 시", "정산 조회 시", "API 호출 시"]]}}
+
 사용자: "TID TXN20240315001 왜 실패했어?"
 → {{"confidence": 0.95, "missing_fields": [], "questions": [], "quick_options": []}}
 
 사용자: "3월 정산 확인해주세요"
 → {{"confidence": 0.85, "missing_fields": [], "questions": [], "quick_options": []}}
+
+사용자: "E003 에러코드 해결 방법 알려줘"
+→ {{"confidence": 0.9, "missing_fields": [], "questions": [], "quick_options": []}}
 """
