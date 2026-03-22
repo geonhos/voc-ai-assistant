@@ -43,3 +43,5 @@ class ChatResponse(BaseModel):
 
     message: MessageResponse
     escalated: bool = False
+    clarification_state: Optional[str] = None  # IDLE, GATHERING_INFO, ANALYZING, ANSWERING
+    quick_options: Optional[list[list[str]]] = None  # Quick-select buttons

@@ -3,8 +3,14 @@
 Provides two public entry points:
 
 - :func:`generate_ai_response` — original anonymous-chat pipeline (RAG only).
-- :func:`generate_merchant_ai_response` — Phase 2 merchant pipeline with
-  2-pass tool-use (intent classification → tool execution → LLM response).
+- :func:`generate_merchant_ai_response` — Phase 3 merchant pipeline with
+  3-pass tool-use (completeness check → intent classification → tool execution
+  → LLM response).
+
+Pass 1.5 (completeness assessment) sits between the keyword escalation check
+and the existing tool-execution pass.  When the user's query lacks sufficient
+context the pipeline enters a GATHERING_INFO clarification loop (max 3 turns)
+before falling through to the normal tool-execution path.
 """
 
 from __future__ import annotations
@@ -292,7 +298,15 @@ async def generate_merchant_ai_response(
     merchant_id: int,
     customer_text: str,
 ) -> dict[str, Any]:
-    """2-pass tool-use pipeline for authenticated merchant chat.
+    """3-pass tool-use pipeline for authenticated merchant chat.
+
+    Pass 1.5 (completeness assessment) is inserted between the keyword
+    escalation check and the existing tool-execution pass.  When the user's
+    query lacks sufficient context the function enters a multi-turn
+    GATHERING_INFO loop (up to ``MAX_CLARIFICATION_TURNS`` rounds) and returns
+    early with a clarification message.  Once the query is deemed complete (or
+    the turn limit is reached) the function falls through to the existing
+    tool-execution and LLM-response path unchanged.
 
     Pass 1: classify intent via LLM → select tool + params.
     Pass 2: execute tool (if any) + RAG retrieval → LLM final response.
@@ -305,9 +319,13 @@ async def generate_merchant_ai_response(
 
     Returns:
         Dict with keys:
-            - ``message``: serialised AI :class:`~app.models.message.Message` fields
-              including ``tool_name``, ``tool_data``, ``confidence``.
+            - ``message``: serialised AI :class:`~app.models.message.Message`
+              fields including ``tool_name``, ``tool_data``, ``confidence``.
             - ``escalated``: bool indicating whether escalation was triggered.
+            - ``clarification_state``: ``"GATHERING_INFO"`` while collecting
+              additional context, ``None`` for normal (complete) responses.
+            - ``quick_options``: Per-question fast-select option lists when in
+              clarification state, otherwise ``None``.
     """
     # Lazy imports to avoid circular dependencies at module load time
     from app.services.tool_router import classify_intent, execute_tool
@@ -317,6 +335,15 @@ async def generate_merchant_ai_response(
         PG_SYSTEM_PROMPT,
         TOOL_CONTEXT_TEMPLATE,
     )
+    from app.services.clarification_state import (
+        get_state,
+        mark_complete,
+        should_force_answer,
+        start_gathering,
+        update_context,
+    )
+    from app.services.completeness import assess_completeness
+
     # Ensure all tools are registered
     import app.tools  # noqa: F401
 
@@ -337,13 +364,265 @@ async def generate_merchant_ai_response(
     keyword_escalation = any(kw in customer_text for kw in _MERCHANT_ESCALATION_KEYWORDS)
 
     # ------------------------------------------------------------------
+    # Pass 1.5 — Multi-turn completeness check
+    #
+    # Two branches:
+    #   A) Already in GATHERING_INFO: user is answering a clarification
+    #      question.  Merge the answer into accumulated context and re-assess.
+    #   B) Fresh query (no active state): assess completeness and, if below
+    #      the threshold, start a clarification flow.
+    # In both cases we may return early with a clarification message.
+    # Otherwise we fall through to the normal tool-execution pipeline.
+    # ------------------------------------------------------------------
+
+    # Tracks whether we eventually resolve a clarification flow so that
+    # T-MT-007 quality self-evaluation can run afterwards.
+    was_in_clarification: bool = False
+    original_query: str = customer_text
+    accumulated_context: dict = {}
+
+    current_clarification = await get_state(db, conversation_id)
+
+    # ---- Branch A: already collecting context from previous turn ----
+    if current_clarification and current_clarification.get("state") == "GATHERING_INFO":
+        logger.info(
+            "Conv %d is in GATHERING_INFO (turn %d/%d) — merging user answer",
+            conversation_id,
+            current_clarification.get("turn_count", 0),
+            3,
+        )
+
+        # Merge the user's latest message into accumulated context
+        await update_context(db, conversation_id, {"last_answer": customer_text})
+        current_clarification = await get_state(db, conversation_id)
+
+        # Carry original query and context through for downstream use
+        original_query = current_clarification.get("original_query", customer_text)
+        accumulated_context = current_clarification.get("accumulated_context", {})
+
+        if should_force_answer(current_clarification):
+            # Max turns reached — clear state and fall through to pipeline
+            logger.info(
+                "Conv %d reached max clarification turns — forcing answer",
+                conversation_id,
+            )
+            await mark_complete(db, conversation_id)
+            was_in_clarification = True
+            # Fall through to tool-execution pipeline below
+
+        else:
+            # Re-assess with the enriched context
+            try:
+                re_intent = await classify_intent(customer_text)
+            except Exception as exc:
+                logger.warning(
+                    "Intent classification failed during clarification re-assess for conv %d: %s",
+                    conversation_id,
+                    exc,
+                )
+                re_intent = {"tool": None}
+
+            history_result = await db.execute(
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(Message.created_at.desc())
+                .limit(10)
+            )
+            history_msgs = list(reversed(history_result.scalars().all()))
+            chat_history = [
+                {
+                    "role": "user" if m.sender == "CUSTOMER" else "assistant",
+                    "content": m.text,
+                }
+                for m in history_msgs
+            ]
+
+            assessment = await assess_completeness(
+                customer_text,
+                re_intent,
+                chat_history,
+                accumulated_context,
+            )
+
+            if not assessment.is_complete:
+                # Still incomplete — update pending questions and ask again
+                logger.info(
+                    "Conv %d still incomplete after re-assess (score=%.2f) — asking again",
+                    conversation_id,
+                    assessment.confidence,
+                )
+                await update_context(
+                    db,
+                    conversation_id,
+                    {
+                        "pending_questions": assessment.questions,
+                        "quick_options": assessment.quick_options,
+                        "completeness_score": assessment.confidence,
+                    },
+                )
+
+                clarification_text = "\n".join(assessment.questions)
+                ai_msg = Message(
+                    conversation_id=conversation_id,
+                    sender="AI",
+                    text=clarification_text,
+                    confidence=assessment.confidence,
+                    tool_name="clarification",
+                    tool_data={
+                        "display_type": "clarification",
+                        "data": {
+                            "questions": assessment.questions,
+                            "quick_options": assessment.quick_options,
+                            "accumulated_context": accumulated_context,
+                            "completeness_score": assessment.confidence,
+                            "turn_count": current_clarification.get("turn_count", 0),
+                            "max_turns": 3,
+                        },
+                    },
+                )
+                db.add(ai_msg)
+                await db.commit()
+                await db.refresh(ai_msg)
+
+                logger.info(
+                    "Conv %d: clarification message saved (id=%d)",
+                    conversation_id,
+                    ai_msg.id,
+                )
+                return {
+                    "message": {
+                        "id": ai_msg.id,
+                        "conversation_id": conversation_id,
+                        "sender": "AI",
+                        "text": clarification_text,
+                        "confidence": assessment.confidence,
+                        "tool_name": "clarification",
+                        "tool_data": ai_msg.tool_data,
+                        "created_at": (
+                            ai_msg.created_at.isoformat() if ai_msg.created_at else None
+                        ),
+                    },
+                    "escalated": False,
+                    "clarification_state": "GATHERING_INFO",
+                    "quick_options": assessment.quick_options,
+                }
+            else:
+                # Sufficient context — clear state and fall through to pipeline
+                logger.info(
+                    "Conv %d clarification complete (score=%.2f) — proceeding to tool execution",
+                    conversation_id,
+                    assessment.confidence,
+                )
+                await mark_complete(db, conversation_id)
+                was_in_clarification = True
+
+    # ---- Branch B: fresh query — assess completeness for the first time ----
+    elif not current_clarification:
+        try:
+            first_intent = await classify_intent(customer_text)
+        except Exception as exc:
+            logger.warning(
+                "Intent classification failed during initial assess for conv %d: %s",
+                conversation_id,
+                exc,
+            )
+            first_intent = {"tool": None}
+
+        history_result = await db.execute(
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.desc())
+            .limit(10)
+        )
+        history_msgs = list(reversed(history_result.scalars().all()))
+        chat_history = [
+            {
+                "role": "user" if m.sender == "CUSTOMER" else "assistant",
+                "content": m.text,
+            }
+            for m in history_msgs
+        ]
+
+        assessment = await assess_completeness(customer_text, first_intent, chat_history)
+
+        if not assessment.is_complete and assessment.confidence < 0.5:
+            logger.info(
+                "Conv %d: query incomplete (score=%.2f) — starting clarification flow",
+                conversation_id,
+                assessment.confidence,
+            )
+            await start_gathering(
+                db,
+                conversation_id,
+                customer_text,
+                assessment.questions,
+                assessment.quick_options,
+                assessment.confidence,
+            )
+
+            clarification_text = (
+                "더 정확한 답변을 위해 추가 정보가 필요합니다.\n\n"
+                + "\n".join(f"• {q}" for q in assessment.questions)
+            )
+            ai_msg = Message(
+                conversation_id=conversation_id,
+                sender="AI",
+                text=clarification_text,
+                confidence=assessment.confidence,
+                tool_name="clarification",
+                tool_data={
+                    "display_type": "clarification",
+                    "data": {
+                        "questions": assessment.questions,
+                        "quick_options": assessment.quick_options,
+                        "accumulated_context": {},
+                        "completeness_score": assessment.confidence,
+                        "turn_count": 1,
+                        "max_turns": 3,
+                    },
+                },
+            )
+            db.add(ai_msg)
+            await db.commit()
+            await db.refresh(ai_msg)
+
+            logger.info(
+                "Conv %d: initial clarification message saved (id=%d)",
+                conversation_id,
+                ai_msg.id,
+            )
+            return {
+                "message": {
+                    "id": ai_msg.id,
+                    "conversation_id": conversation_id,
+                    "sender": "AI",
+                    "text": clarification_text,
+                    "confidence": assessment.confidence,
+                    "tool_name": "clarification",
+                    "tool_data": ai_msg.tool_data,
+                    "created_at": (
+                        ai_msg.created_at.isoformat() if ai_msg.created_at else None
+                    ),
+                },
+                "escalated": False,
+                "clarification_state": "GATHERING_INFO",
+                "quick_options": assessment.quick_options,
+            }
+
+    # ------------------------------------------------------------------
     # 3. Pass 1 — intent classification → tool selection + params
+    #    (existing logic, unchanged)
     # ------------------------------------------------------------------
     tool_result = None
     tool_name: Optional[str] = None
 
+    # Use original_query when resolving from a clarification flow so that
+    # the intent classifier sees the user's primary request, not just the
+    # last short clarification answer.
+    query_for_tools = original_query if was_in_clarification else customer_text
+
     try:
-        intent = await classify_intent(customer_text)
+        intent = await classify_intent(query_for_tools)
         if intent.get("tool"):
             tool_name = intent["tool"]
             tool_result = await execute_tool(
@@ -450,6 +729,53 @@ async def generate_merchant_ai_response(
         confidence = min(1.0, confidence + 0.1)
 
     # ------------------------------------------------------------------
+    # T-MT-007: Self-evaluation for multi-turn completed answers
+    #
+    # Only runs when we resolved a clarification flow.  Asks the LLM to
+    # score how well the generated answer addresses the original query and
+    # the accumulated context.  On any error (network, parse, timeout) we
+    # silently skip — this is a non-critical quality signal.
+    # ------------------------------------------------------------------
+    if was_in_clarification and not ollama_error:
+        try:
+            eval_prompt = (
+                f"사용자 원래 질문: '{original_query}'\n"
+                f"수집된 정보: {accumulated_context}\n"
+                f"생성된 답변: '{ai_text}'\n\n"
+                "이 답변이 사용자의 질문을 충분히 다루고 있나요? "
+                "0.0~1.0 점수만 숫자로 답하세요."
+            )
+            async with httpx.AsyncClient(timeout=10.0) as eval_client:
+                eval_response = await eval_client.post(
+                    f"{settings.OLLAMA_URL}/api/chat",
+                    json={
+                        "model": settings.OLLAMA_CHAT_MODEL,
+                        "messages": [
+                            {"role": "user", "content": eval_prompt},
+                        ],
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.1,
+                            "num_predict": 10,
+                        },
+                    },
+                )
+                eval_response.raise_for_status()
+                raw_score = eval_response.json()["message"]["content"].strip()
+                quality_score = float(raw_score)
+                confidence = min(1.0, confidence + quality_score * 0.1)
+                logger.info(
+                    "Conv %d self-eval quality_score=%.2f → adjusted confidence=%.2f",
+                    conversation_id,
+                    quality_score,
+                    confidence,
+                )
+        except Exception as exc:
+            logger.debug(
+                "Conv %d self-eval skipped: %s", conversation_id, exc
+            )
+
+    # ------------------------------------------------------------------
     # 10. Determine escalation
     # ------------------------------------------------------------------
     should_escalate = False
@@ -509,6 +835,7 @@ async def generate_merchant_ai_response(
     return {
         "message": {
             "id": ai_message.id,
+            "conversation_id": conversation_id,
             "sender": "AI",
             "text": ai_text,
             "confidence": confidence,
@@ -521,4 +848,6 @@ async def generate_merchant_ai_response(
             ),
         },
         "escalated": should_escalate,
+        "clarification_state": None,
+        "quick_options": None,
     }

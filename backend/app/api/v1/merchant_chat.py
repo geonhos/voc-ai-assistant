@@ -165,7 +165,9 @@ async def send_merchant_message(
     )
 
     ai_message_data: dict = result["message"]
-    escalated: bool = result["escalated"]
+    escalated: bool = result.get("escalated", False)
+    clarification_state: str | None = result.get("clarification_state")
+    quick_options: list[list[str]] | None = result.get("quick_options")
 
     if escalated:
         background_tasks.add_task(
@@ -177,7 +179,7 @@ async def send_merchant_message(
 
     message_response = MessageResponse(
         id=ai_message_data["id"],
-        conversation_id=conversation_id,
+        conversation_id=ai_message_data.get("conversation_id", conversation_id),
         sender=ai_message_data["sender"],
         text=ai_message_data["text"],
         confidence=ai_message_data.get("confidence"),
@@ -186,7 +188,12 @@ async def send_merchant_message(
         created_at=ai_message_data["created_at"],
     )
 
-    return ChatResponse(message=message_response, escalated=escalated)
+    return ChatResponse(
+        message=message_response,
+        escalated=escalated,
+        clarification_state=clarification_state,
+        quick_options=quick_options,
+    )
 
 
 # ---------------------------------------------------------------------------
