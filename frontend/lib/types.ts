@@ -3,12 +3,99 @@
 export type ConversationStatus = 'OPEN' | 'ESCALATED' | 'RESOLVED';
 export type MessageSender = 'AI' | 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
 
+// Tool data types for rich message rendering
+export interface ToolData {
+  display_type: 'transaction_card' | 'settlement_table' | 'error_code' | 'api_log' | 'text' | 'clarification';
+  data: TransactionData | SettlementData | ErrorCodeData | ApiLogData | ClarificationData | Record<string, unknown>;
+}
+
+export interface ClarificationData {
+  questions: string[];
+  quick_options: string[][];
+  accumulated_context: Record<string, string>;
+  completeness_score: number;
+  turn_count: number;
+  max_turns: number;
+}
+
+export interface TransactionData {
+  tid: string;
+  amount: number;
+  payment_method: string;
+  card_company?: string;
+  card_number_masked?: string;
+  status: string;
+  error_code?: string;
+  error_message?: string;
+  customer_name?: string;
+  order_id?: string;
+  approved_at?: string;
+  cancelled_at?: string;
+  created_at: string;
+}
+
+export interface SettlementData {
+  settlement_date: string;
+  total_amount: number;
+  fee_amount: number;
+  net_amount: number;
+  transaction_count: number;
+  status: string;
+}
+
+export interface ErrorCodeData {
+  code: string;
+  category: string;
+  description: string;
+  solution: string;
+  severity: string;
+}
+
+export interface ApiLogData {
+  endpoint: string;
+  method: string;
+  status_code: number;
+  error_code?: string;
+  error_message?: string;
+  latency_ms: number;
+  created_at: string;
+}
+
+export interface MerchantUser {
+  id: number;
+  email: string;
+  role: 'MERCHANT' | 'ADMIN';
+  merchant_id: number;
+}
+
+export type MerchantStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING' | 'TERMINATED';
+
+export interface Merchant {
+  id: number;
+  mid: string;
+  name: string;
+  business_number: string;
+  status: MerchantStatus;
+  settings: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface MerchantCreate {
+  mid: string;
+  name: string;
+  business_number: string;
+  settings?: Record<string, unknown>;
+}
+
 export interface Message {
   id: number;
   conversation_id: number;
   sender: MessageSender;
   text: string;
   confidence?: number;
+  tool_name?: string;
+  tool_data?: ToolData;
   created_at: string;
 }
 
@@ -55,6 +142,7 @@ export interface CreateConversationResponse {
   access_token: string;
   customer_name: string;
   customer_email: string;
+  customer_phone: string;
   status: ConversationStatus;
   created_at: string;
 }
@@ -62,4 +150,11 @@ export interface CreateConversationResponse {
 export interface SendMessageResponse {
   message: Message;
   escalated: boolean;
+}
+
+export interface ChatResponse {
+  message: Message;
+  escalated: boolean;
+  clarification_state?: string;
+  quick_options?: string[][];
 }

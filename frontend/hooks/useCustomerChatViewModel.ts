@@ -13,17 +13,13 @@ interface CustomerChatViewModel {
   isLoading: boolean;
   isSending: boolean;
   isEscalated: boolean;
+  showContactForm: boolean;
+  contactSubmitted: boolean;
   conversationId: number | null;
-  customerName: string;
-  customerEmail: string;
-  topic: string;
-  setCustomerName: (v: string) => void;
-  setCustomerEmail: (v: string) => void;
-  setTopic: (v: string) => void;
-  startConversation: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
-  startError: string | null;
+  submitContact: (name: string, email: string, phone: string) => Promise<void>;
   sendError: string | null;
+  contactError: string | null;
 }
 
 const POLL_INTERVAL_MS = 3000;
@@ -33,12 +29,11 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isEscalated, setIsEscalated] = useState(false);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactSubmitted, setContactSubmitted] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [topic, setTopic] = useState('');
-  const [startError, setStartError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [contactError, setContactError] = useState<string | null>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMessageIdRef = useRef<number>(0);
@@ -69,10 +64,7 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
   }, [getConvHeaders]);
 
   useEffect(() => {
-    if (conversationId === null) return;
-
-    // Stop polling if conversation is escalated
-    if (isEscalated) return;
+    if (conversationId === null || isEscalated) return;
 
     pollingRef.current = setInterval(() => {
       fetchMessages(conversationId);
@@ -85,65 +77,48 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
     };
   }, [conversationId, isEscalated, fetchMessages]);
 
-  const startConversation = useCallback(async () => {
-    if (!customerName.trim()) {
-      setStartError('이름을 입력해주세요.');
-      return;
-    }
-    if (!customerEmail.trim()) {
-      setStartError('이메일을 입력해주세요.');
-      return;
-    }
-    if (!topic.trim()) {
-      setStartError('문의 내용을 입력해주세요.');
-      return;
-    }
-
-    setStartError(null);
-    setIsLoading(true);
-
+  // Create conversation on first message
+  const ensureConversation = useCallback(async (firstMessage: string): Promise<{id: number; token: string} | null> => {
     try {
       const conversation = await apiClient.post<CreateConversationResponse>(
         '/chat/conversations',
-        {
-          customer_name: customerName.trim(),
-          customer_email: customerEmail.trim(),
-          initial_message: topic.trim(),
-        },
+        { initial_message: firstMessage },
       );
-
       setConversationId(conversation.id);
       accessTokenRef.current = conversation.access_token;
-
-      // Load initial messages
-      const headers = { 'X-Conversation-Token': conversation.access_token };
-      const msgs = await apiClient.get<Message[]>(
-        `/chat/conversations/${conversation.id}/messages`,
-        headers,
-      );
-      setMessages(msgs);
-      if (msgs.length > 0) {
-        lastMessageIdRef.current = msgs[msgs.length - 1].id;
-      }
+      return { id: conversation.id, token: conversation.access_token };
     } catch (err) {
       const message = err instanceof Error ? err.message : '대화를 시작할 수 없습니다.';
-      setStartError(message);
-    } finally {
-      setIsLoading(false);
+      setSendError(message);
+      return null;
     }
-  }, [customerName, customerEmail, topic]);
+  }, []);
 
   const sendMessage = useCallback(
     async (text: string) => {
-      if (!text.trim() || conversationId === null) return;
+      if (!text.trim()) return;
 
       setSendError(null);
       setIsSending(true);
 
+      let convId = conversationId;
+      let headers = getConvHeaders();
+
+      // Auto-create conversation on first message
+      if (convId === null) {
+        const result = await ensureConversation(text.trim());
+        if (!result) {
+          setIsSending(false);
+          return;
+        }
+        convId = result.id;
+        headers = { 'X-Conversation-Token': result.token };
+      }
+
       // Optimistically add customer message
       const optimisticMsg: Message = {
         id: Date.now(),
-        conversation_id: conversationId,
+        conversation_id: convId,
         sender: 'CUSTOMER',
         text: text.trim(),
         created_at: new Date().toISOString(),
@@ -152,15 +127,15 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
 
       try {
         const response = await apiClient.post<SendMessageResponse>(
-          `/chat/conversations/${conversationId}/messages`,
+          `/chat/conversations/${convId}/messages`,
           { text: text.trim() },
-          getConvHeaders(),
+          headers,
         );
 
-        // Replace optimistic with real messages
+        // Refresh real messages
         const msgs = await apiClient.get<Message[]>(
-          `/chat/conversations/${conversationId}/messages`,
-          getConvHeaders(),
+          `/chat/conversations/${convId}/messages`,
+          headers,
         );
         setMessages(msgs);
         if (msgs.length > 0) {
@@ -169,14 +144,39 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
 
         if (response.escalated) {
           setIsEscalated(true);
+          setShowContactForm(true);
         }
       } catch (err) {
-        // Remove optimistic message on failure
         setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
         const message = err instanceof Error ? err.message : '메시지 전송에 실패했습니다.';
         setSendError(message);
       } finally {
         setIsSending(false);
+      }
+    },
+    [conversationId, getConvHeaders, ensureConversation],
+  );
+
+  const submitContact = useCallback(
+    async (name: string, email: string, phone: string) => {
+      if (conversationId === null) return;
+      setContactError(null);
+
+      try {
+        await apiClient.patch(
+          `/chat/conversations/${conversationId}/contact`,
+          {
+            customer_name: name.trim(),
+            customer_email: email.trim(),
+            customer_phone: phone.trim(),
+          },
+          getConvHeaders(),
+        );
+        setContactSubmitted(true);
+        setShowContactForm(false);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '연락처 저장에 실패했습니다.';
+        setContactError(message);
       }
     },
     [conversationId, getConvHeaders],
@@ -187,16 +187,12 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
     isLoading,
     isSending,
     isEscalated,
+    showContactForm,
+    contactSubmitted,
     conversationId,
-    customerName,
-    customerEmail,
-    topic,
-    setCustomerName,
-    setCustomerEmail,
-    setTopic,
-    startConversation,
     sendMessage,
-    startError,
+    submitContact,
     sendError,
+    contactError,
   };
 }

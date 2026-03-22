@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     CONFIDENCE_ESCALATE_THRESHOLD: float = 0.5
     MAX_LOW_CONFIDENCE_STREAK: int = 3
 
+    # Tool classification settings
+    TOOL_CLASSIFICATION_TEMPERATURE: float = 0.1
+    TOOL_CLASSIFICATION_MAX_TOKENS: int = 200
+
     model_config = SettingsConfigDict(env_file=".env")
 
     @model_validator(mode="after")
