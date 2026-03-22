@@ -1,6 +1,7 @@
 'use client';
 
 import type { MessageSender, ToolData, TransactionData, SettlementData, ErrorCodeData, ApiLogData, ClarificationData } from '@/lib/types';
+import ReactMarkdown from 'react-markdown';
 import { TransactionCard } from './TransactionCard';
 import { SettlementTable } from './SettlementTable';
 import { ErrorCodeInfo } from './ErrorCodeInfo';
@@ -124,7 +125,9 @@ export function MessageBubble({ sender, text, timestamp, confidence, toolData, o
           )}
         </div>
         <div className="bg-white border border-[var(--color-neutral-200)] text-[var(--color-neutral-900)] rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm">
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+          <div className="text-sm leading-relaxed prose prose-sm prose-neutral max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>li]:my-0.5">
+            <ReactMarkdown>{text}</ReactMarkdown>
+          </div>
           {toolData && <ToolDataRenderer toolData={toolData} onOptionSelect={onOptionSelect} disabled={disabled} />}
         </div>
         <p className="text-[11px] text-[var(--color-neutral-500)] mt-1">
