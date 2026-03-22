@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
     # AI / RAG settings
-    OLLAMA_CHAT_MODEL: str = "qwen2.5:7b"
+    OLLAMA_CHAT_MODEL: str = "exaone3.5:7.8b"
     OLLAMA_EMBED_MODEL: str = "bge-m3"
     EMBEDDING_DIM: int = 1024
     RAG_TOP_K: int = 3
