@@ -53,14 +53,14 @@ export default function CustomerConversationsPage() {
           onClick={handleNewConversation}
           className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--color-primary-dark)] transition-colors"
         >
-          <span className="material-icons-outlined text-[18px]">add</span>
+          <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
           새 문의
         </button>
       </div>
 
       {!isLoading && conversations.length === 0 && (
         <div className="text-center py-16">
-          <span className="material-icons-outlined text-5xl text-[var(--color-neutral-300)] mb-4 block">forum</span>
+          <svg className="w-12 h-12 text-[var(--color-neutral-300)] mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
           <p className="text-[var(--color-neutral-500)]">아직 대화 이력이 없습니다.</p>
           <button
             onClick={handleNewConversation}
@@ -82,7 +82,7 @@ export default function CustomerConversationsPage() {
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-[var(--color-neutral-100)] rounded-full flex items-center justify-center">
-                  <span className="material-icons-outlined text-[20px] text-[var(--color-neutral-500)]">chat</span>
+                  <svg className="w-5 h-5 text-[var(--color-neutral-500)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-[var(--color-neutral-900)]">

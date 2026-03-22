@@ -111,7 +111,7 @@ export default function CustomerChatPage() {
       <div className="flex-1 overflow-y-auto p-4 space-y-1">
         {!convId && messages.length === 0 && (
           <div className="text-center py-16">
-            <span className="material-icons-outlined text-5xl text-[var(--color-neutral-300)] mb-4 block">support_agent</span>
+            <svg className="w-12 h-12 text-[var(--color-neutral-300)] mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
             <p className="text-[var(--color-neutral-600)] font-medium">무엇을 도와드릴까요?</p>
             <p className="text-sm text-[var(--color-neutral-400)] mt-1">결제, 정산, API 등 무엇이든 문의하세요.</p>
           </div>
