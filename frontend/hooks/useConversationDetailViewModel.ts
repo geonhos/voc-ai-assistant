@@ -29,7 +29,7 @@ export function useConversationDetailViewModel(id: string): ConversationDetailVi
     try {
       const [conv, msgs] = await Promise.all([
         apiClient.get<Conversation>(`/admin/conversations/${id}`),
-        apiClient.get<Message[]>(`/chat/conversations/${id}/messages`),
+        apiClient.get<Message[]>(`/admin/conversations/${id}/messages`),
       ]);
       setConversation(conv);
       setMessages(msgs);
@@ -52,7 +52,7 @@ export function useConversationDetailViewModel(id: string): ConversationDetailVi
       try {
         await apiClient.post(`/admin/conversations/${id}/messages`, { text: text.trim() });
         // Refresh messages after sending
-        const msgs = await apiClient.get<Message[]>(`/chat/conversations/${id}/messages`);
+        const msgs = await apiClient.get<Message[]>(`/admin/conversations/${id}/messages`);
         setMessages(msgs);
       } catch (err) {
         const message = err instanceof Error ? err.message : '메시지 전송에 실패했습니다.';

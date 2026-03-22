@@ -185,6 +185,38 @@ async def get_dashboard_stats(
     )
 
 
+@router.get(
+    "/conversations/{conversation_id}/messages",
+    response_model=list[MessageResponse],
+    summary="Get all messages in a conversation",
+)
+async def get_conversation_messages(
+    conversation_id: int,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+) -> list[MessageResponse]:
+    """Fetch all messages for a conversation in chronological order.
+
+    Args:
+        conversation_id: Primary key of the target conversation.
+        db: Active async database session.
+        _admin: Authenticated admin user.
+
+    Returns:
+        List of MessageResponse objects ordered oldest-first.
+
+    Raises:
+        HTTPException 404: If the conversation does not exist.
+    """
+    conversation = await conv_service.get_conversation(db, conversation_id)
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found",
+        )
+    return [MessageResponse.model_validate(m) for m in conversation.messages]
+
+
 @router.post(
     "/conversations/{conversation_id}/messages",
     response_model=MessageResponse,

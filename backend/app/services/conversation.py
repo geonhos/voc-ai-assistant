@@ -264,4 +264,5 @@ async def update_conversation_status(
         conversation.resolved_by = resolved_by
 
     await db.flush()
+    await db.refresh(conversation)
     return conversation
