@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -35,6 +36,9 @@ class Conversation(BaseModel):
     )
     merchant_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("merchants.id"), nullable=True, index=True
+    )
+    clarification_state: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True
     )
 
     messages: Mapped[List["Message"]] = relationship(
