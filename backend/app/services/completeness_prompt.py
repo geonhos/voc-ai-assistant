@@ -31,6 +31,7 @@ COMPLETENESS_ASSESSMENT_PROMPT = """당신은 B2B PG(결제대행) 가맹점 지
 }}
 
 규칙:
+- 반드시 한국어로만 응답하세요. 중국어나 영어를 절대 사용하지 마세요.
 - confidence >= 0.8: 충분한 정보, questions는 빈 배열
 - confidence 0.5~0.8: 답변 가능하지만 추가 정보 있으면 좋음
 - confidence < 0.5: 정보 부족, 반드시 questions 제공

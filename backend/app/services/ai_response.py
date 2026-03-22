@@ -733,7 +733,7 @@ async def generate_merchant_ai_response(
                 f"수집된 정보: {accumulated_context}\n"
                 f"생성된 답변: '{ai_text}'\n\n"
                 "이 답변이 사용자의 질문을 충분히 다루고 있나요? "
-                "0.0~1.0 점수만 숫자로 답하세요."
+                "0.0~1.0 점수만 숫자 하나로 답하세요. 다른 말은 하지 마세요."
             )
             eval_client = _get_client()
             eval_response = await eval_client.post(
