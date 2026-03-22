@@ -5,8 +5,17 @@ export type MessageSender = 'AI' | 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
 
 // Tool data types for rich message rendering
 export interface ToolData {
-  display_type: 'transaction_card' | 'settlement_table' | 'error_code' | 'api_log' | 'text';
-  data: TransactionData | SettlementData | ErrorCodeData | ApiLogData | Record<string, unknown>;
+  display_type: 'transaction_card' | 'settlement_table' | 'error_code' | 'api_log' | 'text' | 'clarification';
+  data: TransactionData | SettlementData | ErrorCodeData | ApiLogData | ClarificationData | Record<string, unknown>;
+}
+
+export interface ClarificationData {
+  questions: string[];
+  quick_options: string[][];
+  accumulated_context: Record<string, string>;
+  completeness_score: number;
+  turn_count: number;
+  max_turns: number;
 }
 
 export interface TransactionData {
@@ -141,4 +150,11 @@ export interface CreateConversationResponse {
 export interface SendMessageResponse {
   message: Message;
   escalated: boolean;
+}
+
+export interface ChatResponse {
+  message: Message;
+  escalated: boolean;
+  clarification_state?: string;
+  quick_options?: string[][];
 }

@@ -90,6 +90,12 @@ export default function MerchantChatPage() {
                 <span className="text-xs text-[var(--color-neutral-500)]">온라인</span>
               </div>
             </div>
+            {vm.clarificationState === 'GATHERING_INFO' && (
+              <div className="ml-auto flex items-center gap-2 px-3 py-1 bg-[var(--color-primary-light)] text-[var(--color-primary)] text-xs font-medium rounded-full">
+                <div className="w-2 h-2 bg-[var(--color-primary)] rounded-full animate-pulse" />
+                추가 정보 수집 중...
+              </div>
+            )}
           </div>
 
           {/* Messages */}
@@ -114,6 +120,8 @@ export default function MerchantChatPage() {
                 timestamp={msg.created_at}
                 confidence={msg.confidence}
                 toolData={msg.tool_data}
+                onOptionSelect={vm.sendQuickOption}
+                disabled={vm.isSending}
               />
             ))}
 

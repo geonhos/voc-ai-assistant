@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/api-client';
-import type { Message, Conversation } from '@/lib/types';
+import type { Message, Conversation, ChatResponse } from '@/lib/types';
 
 interface MerchantChatViewModel {
   messages: Message[];
@@ -11,9 +11,12 @@ interface MerchantChatViewModel {
   isLoading: boolean;
   isSending: boolean;
   sendError: string | null;
+  clarificationState: string | null;
+  quickOptions: string[][] | null;
   createConversation: () => Promise<number | null>;
   selectConversation: (id: number) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
+  sendQuickOption: (text: string) => Promise<void>;
   loadConversations: () => Promise<void>;
 }
 
@@ -26,6 +29,8 @@ export function useMerchantChatViewModel(): MerchantChatViewModel {
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [clarificationState, setClarificationState] = useState<string | null>(null);
+  const [quickOptions, setQuickOptions] = useState<string[][] | null>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMessageIdRef = useRef<number>(0);
@@ -135,10 +140,13 @@ export function useMerchantChatViewModel(): MerchantChatViewModel {
       setMessages((prev) => [...prev, optimisticMsg]);
 
       try {
-        await apiClient.post(
+        const response = await apiClient.post<ChatResponse>(
           `/merchant/conversations/${convId}/messages`,
           { text: text.trim() },
         );
+
+        setClarificationState(response.clarification_state ?? null);
+        setQuickOptions(response.quick_options ?? null);
 
         const msgs = await apiClient.get<Message[]>(
           `/merchant/conversations/${convId}/messages`,
@@ -158,6 +166,13 @@ export function useMerchantChatViewModel(): MerchantChatViewModel {
     [activeConversationId, createConversation],
   );
 
+  const sendQuickOption = useCallback(
+    async (text: string) => {
+      await sendMessage(text);
+    },
+    [sendMessage],
+  );
+
   return {
     messages,
     conversations,
@@ -165,9 +180,12 @@ export function useMerchantChatViewModel(): MerchantChatViewModel {
     isLoading,
     isSending,
     sendError,
+    clarificationState,
+    quickOptions,
     createConversation,
     selectConversation,
     sendMessage,
+    sendQuickOption,
     loadConversations,
   };
 }
