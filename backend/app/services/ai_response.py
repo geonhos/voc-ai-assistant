@@ -341,6 +341,7 @@ async def generate_merchant_ai_response(
         should_force_answer,
         start_gathering,
         update_context,
+        update_state_metadata,
     )
     from app.services.completeness import assess_completeness
 
@@ -392,8 +393,9 @@ async def generate_merchant_ai_response(
             3,
         )
 
-        # Merge the user's latest message into accumulated context
-        await update_context(db, conversation_id, {"last_answer": customer_text})
+        # Merge the user's latest answer keyed by turn number
+        turn = current_clarification.get("turn_count", 0)
+        await update_context(db, conversation_id, {f"answer_turn_{turn}": customer_text})
         current_clarification = await get_state(db, conversation_id)
 
         # Carry original query and context through for downstream use
@@ -407,6 +409,7 @@ async def generate_merchant_ai_response(
                 conversation_id,
             )
             await mark_complete(db, conversation_id)
+            await db.commit()
             was_in_clarification = True
             # Fall through to tool-execution pipeline below
 
@@ -422,20 +425,7 @@ async def generate_merchant_ai_response(
                 )
                 re_intent = {"tool": None}
 
-            history_result = await db.execute(
-                select(Message)
-                .where(Message.conversation_id == conversation_id)
-                .order_by(Message.created_at.desc())
-                .limit(10)
-            )
-            history_msgs = list(reversed(history_result.scalars().all()))
-            chat_history = [
-                {
-                    "role": "user" if m.sender == "CUSTOMER" else "assistant",
-                    "content": m.text,
-                }
-                for m in history_msgs
-            ]
+            chat_history = await _get_conversation_history(db, conversation_id)
 
             assessment = await assess_completeness(
                 customer_text,
@@ -451,14 +441,12 @@ async def generate_merchant_ai_response(
                     conversation_id,
                     assessment.confidence,
                 )
-                await update_context(
+                await update_state_metadata(
                     db,
                     conversation_id,
-                    {
-                        "pending_questions": assessment.questions,
-                        "quick_options": assessment.quick_options,
-                        "completeness_score": assessment.confidence,
-                    },
+                    pending_questions=assessment.questions,
+                    quick_options=assessment.quick_options,
+                    completeness_score=assessment.confidence,
                 )
 
                 clarification_text = "\n".join(assessment.questions)
@@ -514,6 +502,7 @@ async def generate_merchant_ai_response(
                     assessment.confidence,
                 )
                 await mark_complete(db, conversation_id)
+                await db.commit()
                 was_in_clarification = True
 
     # ---- Branch B: fresh query — assess completeness for the first time ----
@@ -528,20 +517,7 @@ async def generate_merchant_ai_response(
             )
             first_intent = {"tool": None}
 
-        history_result = await db.execute(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at.desc())
-            .limit(10)
-        )
-        history_msgs = list(reversed(history_result.scalars().all()))
-        chat_history = [
-            {
-                "role": "user" if m.sender == "CUSTOMER" else "assistant",
-                "content": m.text,
-            }
-            for m in history_msgs
-        ]
+        chat_history = await _get_conversation_history(db, conversation_id)
 
         assessment = await assess_completeness(customer_text, first_intent, chat_history)
 
@@ -577,7 +553,7 @@ async def generate_merchant_ai_response(
                         "quick_options": assessment.quick_options,
                         "accumulated_context": {},
                         "completeness_score": assessment.confidence,
-                        "turn_count": 1,
+                        "turn_count": 0,
                         "max_turns": 3,
                     },
                 },
@@ -616,10 +592,24 @@ async def generate_merchant_ai_response(
     tool_result = None
     tool_name: Optional[str] = None
 
-    # Use original_query when resolving from a clarification flow so that
-    # the intent classifier sees the user's primary request, not just the
-    # last short clarification answer.
-    query_for_tools = original_query if was_in_clarification else customer_text
+    # Use original_query enriched with accumulated context when resolving
+    # from a clarification flow so that the intent classifier and RAG see
+    # the full picture, not just the last short clarification answer.
+    if was_in_clarification and accumulated_context:
+        context_str = " ".join(
+            str(v) for k, v in accumulated_context.items()
+            if not k.startswith("answer_turn_")
+        )
+        # Include raw answers too
+        answers_str = " ".join(
+            str(v) for k, v in accumulated_context.items()
+            if k.startswith("answer_turn_")
+        )
+        query_for_tools = f"{original_query} {answers_str} {context_str}".strip()
+    elif was_in_clarification:
+        query_for_tools = original_query
+    else:
+        query_for_tools = customer_text
 
     try:
         intent = await classify_intent(query_for_tools)
@@ -646,7 +636,7 @@ async def generate_merchant_ai_response(
     # ------------------------------------------------------------------
     rag_articles = await retrieve_context(
         db,
-        customer_text,
+        query_for_tools,
         top_k=settings.RAG_TOP_K,
         similarity_threshold=settings.RAG_SIMILARITY_THRESHOLD,
     )
@@ -745,31 +735,31 @@ async def generate_merchant_ai_response(
                 "이 답변이 사용자의 질문을 충분히 다루고 있나요? "
                 "0.0~1.0 점수만 숫자로 답하세요."
             )
-            async with httpx.AsyncClient(timeout=10.0) as eval_client:
-                eval_response = await eval_client.post(
-                    f"{settings.OLLAMA_URL}/api/chat",
-                    json={
-                        "model": settings.OLLAMA_CHAT_MODEL,
-                        "messages": [
-                            {"role": "user", "content": eval_prompt},
-                        ],
-                        "stream": False,
-                        "options": {
-                            "temperature": 0.1,
-                            "num_predict": 10,
-                        },
+            eval_client = _get_client()
+            eval_response = await eval_client.post(
+                "/api/chat",
+                json={
+                    "model": settings.OLLAMA_CHAT_MODEL,
+                    "messages": [
+                        {"role": "user", "content": eval_prompt},
+                    ],
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.1,
+                        "num_predict": 10,
                     },
-                )
-                eval_response.raise_for_status()
-                raw_score = eval_response.json()["message"]["content"].strip()
-                quality_score = float(raw_score)
-                confidence = min(1.0, confidence + quality_score * 0.1)
-                logger.info(
-                    "Conv %d self-eval quality_score=%.2f → adjusted confidence=%.2f",
-                    conversation_id,
-                    quality_score,
-                    confidence,
-                )
+                },
+            )
+            eval_response.raise_for_status()
+            raw_score = eval_response.json()["message"]["content"].strip()
+            quality_score = max(0.0, min(1.0, float(raw_score)))
+            confidence = min(1.0, confidence + quality_score * 0.1)
+            logger.info(
+                "Conv %d self-eval quality_score=%.2f → adjusted confidence=%.2f",
+                conversation_id,
+                quality_score,
+                confidence,
+            )
         except Exception as exc:
             logger.debug(
                 "Conv %d self-eval skipped: %s", conversation_id, exc

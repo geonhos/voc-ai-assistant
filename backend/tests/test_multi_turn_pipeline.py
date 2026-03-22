@@ -87,7 +87,7 @@ class TestClarificationStateHelpers:
             should_force_answer,
         )
 
-        state = {"state": "GATHERING_INFO", "turn_count": MAX_CLARIFICATION_TURNS}
+        state = {"state": "GATHERING_INFO", "turn_count": MAX_CLARIFICATION_TURNS + 1}
         assert should_force_answer(state) is True
 
     def test_should_force_answer_true_above_limit(self):
@@ -118,7 +118,7 @@ class TestClarificationStateHelpers:
         assert result == stored
 
     @pytest.mark.asyncio
-    async def test_start_gathering_returns_state_with_turn_count_1(self):
+    async def test_start_gathering_returns_state_with_turn_count_0(self):
         from app.services.clarification_state import start_gathering
 
         mock_db = _make_mock_db()
@@ -132,7 +132,7 @@ class TestClarificationStateHelpers:
         )
 
         assert state["state"] == "GATHERING_INFO"
-        assert state["turn_count"] == 1
+        assert state["turn_count"] == 0
         assert state["original_query"] == "거래 조회"
         assert state["completeness_score"] == pytest.approx(0.3)
 
@@ -221,12 +221,10 @@ class TestAssessCompleteness:
             }
         )
 
-        with patch("app.services.completeness.httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=fake_response)
-            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=fake_response)
 
+        with patch("app.services.ai_response._get_client", return_value=mock_client):
             result = await assess_completeness(
                 "TXN001 거래 조회해 주세요",
                 {"tool": "lookup_transaction"},
@@ -252,12 +250,10 @@ class TestAssessCompleteness:
             return_value={"message": {"content": json.dumps(payload)}}
         )
 
-        with patch("app.services.completeness.httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=fake_response)
-            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=fake_response)
 
+        with patch("app.services.ai_response._get_client", return_value=mock_client):
             result = await assess_completeness(
                 "거래 조회해 주세요",
                 {"tool": None},
@@ -274,12 +270,10 @@ class TestAssessCompleteness:
         """On any HTTP/parse error, assess_completeness defaults to is_complete=True."""
         from app.services.completeness import assess_completeness
 
-        with patch("app.services.completeness.httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(side_effect=RuntimeError("network error"))
-            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=RuntimeError("network error"))
 
+        with patch("app.services.ai_response._get_client", return_value=mock_client):
             result = await assess_completeness("질문", {}, [])
 
         assert result.is_complete is True
@@ -328,7 +322,7 @@ class TestGenerateMerchantAiResponsePhase3:
                 "app.services.clarification_state.start_gathering",
                 new=AsyncMock(return_value={
                     "state": "GATHERING_INFO",
-                    "turn_count": 1,
+                    "turn_count": 0,
                     "original_query": "거래 조회",
                     "accumulated_context": {},
                 }),
@@ -424,7 +418,7 @@ class TestGenerateMerchantAiResponsePhase3:
             "pending_questions": ["거래번호를 알려주세요."],
             "quick_options": [["TXN001", "TXN002"]],
         }
-        updated_state = dict(active_state, turn_count=2, accumulated_context={"last_answer": "모르겠어요"})
+        updated_state = dict(active_state, turn_count=2, accumulated_context={"answer_turn_1": "모르겠어요"})
 
         still_incomplete = CompletenessResult(
             is_complete=False,
@@ -445,6 +439,10 @@ class TestGenerateMerchantAiResponsePhase3:
             ),
             patch(
                 "app.services.clarification_state.mark_complete",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.services.clarification_state.update_state_metadata",
                 new=AsyncMock(),
             ),
             patch(
@@ -486,7 +484,7 @@ class TestGenerateMerchantAiResponsePhase3:
             "original_query": "거래 조회",
             "accumulated_context": {},
         }
-        updated_state = dict(active_state, turn_count=2, accumulated_context={"last_answer": "TXN001"})
+        updated_state = dict(active_state, turn_count=2, accumulated_context={"answer_turn_1": "TXN001"})
 
         now_complete = CompletenessResult(is_complete=True, confidence=0.9)
 
@@ -552,7 +550,7 @@ class TestGenerateMerchantAiResponsePhase3:
             "state": "GATHERING_INFO",
             "turn_count": MAX_CLARIFICATION_TURNS,
             "original_query": "거래 조회",
-            "accumulated_context": {"last_answer": "모르겠어요"},
+            "accumulated_context": {"answer_turn_2": "모르겠어요"},
         }
         after_update_state = dict(at_limit_state, turn_count=MAX_CLARIFICATION_TURNS + 1)
 
@@ -619,7 +617,7 @@ class TestGenerateMerchantAiResponsePhase3:
             "original_query": "거래 조회",
             "accumulated_context": {},
         }
-        updated_state = dict(active_state, turn_count=2, accumulated_context={"last_answer": "TXN001"})
+        updated_state = dict(active_state, turn_count=2, accumulated_context={"answer_turn_1": "TXN001"})
         now_complete = CompletenessResult(is_complete=True, confidence=0.9)
 
         with (
@@ -649,15 +647,11 @@ class TestGenerateMerchantAiResponsePhase3:
             ),
             patch(
                 "app.services.ai_response._get_client",
-                return_value=AsyncMock(post=AsyncMock(return_value=fake_ollama)),
+                return_value=AsyncMock(
+                    post=AsyncMock(side_effect=[fake_ollama, fake_eval]),
+                ),
             ),
-            patch("app.services.ai_response.httpx.AsyncClient") as mock_cls,
         ):
-            mock_eval_client = AsyncMock()
-            mock_eval_client.post = AsyncMock(return_value=fake_eval)
-            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_eval_client)
-            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
             result = await generate_merchant_ai_response(
                 mock_db,
                 conversation_id=1,
@@ -706,13 +700,7 @@ class TestGenerateMerchantAiResponsePhase3:
                 "app.services.ai_response._get_client",
                 return_value=AsyncMock(post=AsyncMock(return_value=fake_ollama)),
             ),
-            patch("app.services.ai_response.httpx.AsyncClient") as mock_cls,
         ):
-            mock_eval_client = AsyncMock()
-            mock_eval_client.post = fake_eval_client_post
-            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_eval_client)
-            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
             result = await generate_merchant_ai_response(
                 mock_db,
                 conversation_id=1,
@@ -720,7 +708,7 @@ class TestGenerateMerchantAiResponsePhase3:
                 customer_text="TXN001 거래 조회해 주세요",
             )
 
-        # Self-eval must NOT have been called
+        # Self-eval must NOT have been called (was_in_clarification is False)
         assert len(eval_called) == 0
         assert result["message"]["confidence"] == pytest.approx(0.75)
 
@@ -832,7 +820,7 @@ class TestGenerateMerchantAiResponsePhase3:
             "original_query": "정산 조회",
             "accumulated_context": {},
         }
-        updated_state = dict(active_state, turn_count=2, accumulated_context={"last_answer": "3월"})
+        updated_state = dict(active_state, turn_count=2, accumulated_context={"answer_turn_1": "3월"})
         now_complete = CompletenessResult(is_complete=True, confidence=0.85)
 
         with (
@@ -862,16 +850,14 @@ class TestGenerateMerchantAiResponsePhase3:
             ),
             patch(
                 "app.services.ai_response._get_client",
-                return_value=AsyncMock(post=AsyncMock(return_value=fake_ollama)),
+                return_value=AsyncMock(
+                    post=AsyncMock(side_effect=[
+                        fake_ollama,  # Pass 2 LLM
+                        RuntimeError("timeout"),  # Self-eval fails
+                    ]),
+                ),
             ),
-            patch("app.services.ai_response.httpx.AsyncClient") as mock_cls,
         ):
-            # Simulate network failure during self-eval
-            mock_eval_client = AsyncMock()
-            mock_eval_client.post = AsyncMock(side_effect=RuntimeError("timeout"))
-            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_eval_client)
-            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
             result = await generate_merchant_ai_response(
                 mock_db,
                 conversation_id=1,

@@ -10,8 +10,6 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-import httpx
-
 from app.core.config import settings
 from app.services.completeness_prompt import COMPLETENESS_ASSESSMENT_PROMPT
 from app.tools.base import ToolRegistry
@@ -120,38 +118,40 @@ async def assess_completeness(
     )
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                f"{settings.OLLAMA_URL}/api/chat",
-                json={
-                    "model": settings.OLLAMA_CHAT_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": message},
-                    ],
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.2,
-                        "num_predict": 200,
-                    },
+        from app.services.ai_response import _get_client
+
+        client = _get_client()
+        response = await client.post(
+            "/api/chat",
+            json={
+                "model": settings.OLLAMA_CHAT_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": message},
+                ],
+                "stream": False,
+                "options": {
+                    "temperature": 0.2,
+                    "num_predict": 200,
                 },
-            )
-            response.raise_for_status()
-            raw_content: str = response.json()["message"]["content"]
-            clean_content = _strip_markdown_code_block(raw_content)
+            },
+        )
+        response.raise_for_status()
+        raw_content: str = response.json()["message"]["content"]
+        clean_content = _strip_markdown_code_block(raw_content)
 
-            data = json.loads(clean_content)
+        data = json.loads(clean_content)
 
-            confidence = float(data.get("confidence", 1.0))
-            is_complete = confidence >= 0.8
+        confidence = float(data.get("confidence", 1.0))
+        is_complete = confidence >= 0.8
 
-            return CompletenessResult(
-                is_complete=is_complete,
-                confidence=confidence,
-                missing_fields=data.get("missing_fields", []),
-                questions=data.get("questions", []),
-                quick_options=data.get("quick_options", []),
-            )
+        return CompletenessResult(
+            is_complete=is_complete,
+            confidence=confidence,
+            missing_fields=data.get("missing_fields", []),
+            questions=data.get("questions", []),
+            quick_options=data.get("quick_options", []),
+        )
     except Exception as exc:
         logger.warning(
             "Completeness assessment failed: %s — defaulting to complete", exc

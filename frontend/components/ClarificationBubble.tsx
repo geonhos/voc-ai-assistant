@@ -72,7 +72,7 @@ export function ClarificationBubble({ data, onOptionSelect, disabled }: Clarific
       {/* Questions with quick options */}
       <div className="space-y-3">
         {questions.map((question, qIdx) => (
-          <div key={qIdx}>
+          <div key={question}>
             <p className="text-sm text-[var(--color-neutral-800)] mb-2">
               <span className="font-medium">Q{qIdx + 1}.</span> {question}
             </p>

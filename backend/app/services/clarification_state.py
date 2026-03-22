@@ -99,7 +99,7 @@ async def start_gathering(
         "accumulated_context": {},
         "pending_questions": questions,
         "quick_options": quick_options,
-        "turn_count": 1,
+        "turn_count": 0,
         "original_query": original_query,
         "completeness_score": completeness_score,
     }
@@ -170,6 +170,46 @@ async def mark_complete(db: AsyncSession, conversation_id: int) -> None:
     await db.flush()
 
 
+async def update_state_metadata(
+    db: AsyncSession,
+    conversation_id: int,
+    *,
+    pending_questions: list[str] | None = None,
+    quick_options: list[list[str]] | None = None,
+    completeness_score: float | None = None,
+) -> None:
+    """Update top-level metadata fields on the clarification state.
+
+    Unlike :func:`update_context`, this does NOT merge into
+    ``accumulated_context`` — it patches top-level fields like
+    ``pending_questions`` and ``quick_options`` directly.
+
+    Args:
+        db: Active async database session.
+        conversation_id: ID of the conversation to update.
+        pending_questions: New pending questions (replaces existing).
+        quick_options: New quick-select options (replaces existing).
+        completeness_score: Updated confidence score.
+    """
+    current = await get_state(db, conversation_id)
+    if not current:
+        return
+
+    if pending_questions is not None:
+        current["pending_questions"] = pending_questions
+    if quick_options is not None:
+        current["quick_options"] = quick_options
+    if completeness_score is not None:
+        current["completeness_score"] = completeness_score
+
+    await db.execute(
+        update(Conversation)
+        .where(Conversation.id == conversation_id)
+        .values(clarification_state=current)
+    )
+    await db.flush()
+
+
 def should_force_answer(state: Optional[ClarificationState]) -> bool:
     """Return True when the clarification turn limit has been reached.
 
@@ -180,8 +220,8 @@ def should_force_answer(state: Optional[ClarificationState]) -> bool:
         state: Current clarification state, or ``None`` for idle conversations.
 
     Returns:
-        ``True`` if ``turn_count >= MAX_CLARIFICATION_TURNS``.
+        ``True`` if ``turn_count > MAX_CLARIFICATION_TURNS``.
     """
     if not state:
         return False
-    return state.get("turn_count", 0) >= MAX_CLARIFICATION_TURNS
+    return state.get("turn_count", 0) > MAX_CLARIFICATION_TURNS
