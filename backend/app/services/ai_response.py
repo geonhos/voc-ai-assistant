@@ -45,8 +45,11 @@ SYSTEM_PROMPT = """당신은 고객 지원 AI 어시스턴트입니다.
 {context}
 
 규칙:
-- 한국어로 답변합니다
-- 간결하되 충분한 정보를 제공합니다 (2-4문장)
+- 반드시 한국어로만 답변합니다
+- 간결하고 사무적인 대화체로 답변합니다 (2-4문장)
+- 다음 표현은 사용 금지: "안타깝네요", "특히", "~하셨군요", "~다니"
+- 고객이 제공하지 않은 정보를 추측하거나 미리 언급하지 마세요
+- 정보가 부족하면 "오류 코드나 상세 내용을 알려주시면 확인해 드리겠습니다"처럼 요청하세요
 - 해결이 어려우면 "전문 상담사에게 연결해 드리겠습니다"라고 안내합니다
 - 답변 마지막에 [confidence: 0.0~1.0] 형태로 확신도를 표시합니다
   - 0.8~1.0: KB 문서에 정확한 답변이 있을 때
@@ -172,13 +175,21 @@ async def generate_ai_response(
     keyword_escalation = _check_escalation_keywords(customer_text)
 
     # 3. RAG context retrieval
-    rag_articles = await retrieve_context(
-        db,
-        customer_text,
-        top_k=settings.RAG_TOP_K,
-        similarity_threshold=settings.RAG_SIMILARITY_THRESHOLD,
-    )
-    context_str = format_context(rag_articles)
+    #    Skip KB on the very first customer message (conversation has <=2 messages:
+    #    the customer msg we just flushed + possibly one prior).  This prevents the
+    #    AI from pre-emptively citing KB content before the customer provides specifics.
+    history_for_count = await _get_conversation_history(db, conversation_id)
+    if len(history_for_count) <= 2:
+        rag_articles: list[dict] = []
+        context_str = ""
+    else:
+        rag_articles = await retrieve_context(
+            db,
+            customer_text,
+            top_k=settings.RAG_TOP_K,
+            similarity_threshold=settings.RAG_SIMILARITY_THRESHOLD,
+        )
+        context_str = format_context(rag_articles)
 
     # 4 & 5. Build prompt messages (history already includes the just-flushed customer msg)
     system_message = SYSTEM_PROMPT.format(context=context_str)
