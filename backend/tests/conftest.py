@@ -1,5 +1,10 @@
 """Pytest fixtures for the VOC AI Assistant backend test suite."""
 
+import os
+
+# Allow insecure JWT defaults in test environment
+os.environ.setdefault("TESTING", "1")
+
 import asyncio
 from collections.abc import AsyncGenerator
 

@@ -1,12 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { MessageBubble } from '@/components/MessageBubble';
 import type { Message, Conversation, ChatResponse } from '@/lib/types';
 
 export default function CustomerChatPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-full text-sm text-[var(--color-neutral-400)]">로딩 중...</div>}>
+      <CustomerChatContent />
+    </Suspense>
+  );
+}
+
+function CustomerChatContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const conversationId = searchParams.get('id');

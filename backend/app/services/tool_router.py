@@ -111,7 +111,11 @@ async def classify_intent(message: str) -> dict[str, Any]:
 
     raw_content: str = response.json()["message"]["content"]
     clean_content = _strip_markdown_code_block(raw_content)
-    return json.loads(clean_content)
+    try:
+        return json.loads(clean_content)
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse intent classification JSON: %s", clean_content[:200])
+        return {"tool": None, "params": {}}
 
 
 async def execute_tool(

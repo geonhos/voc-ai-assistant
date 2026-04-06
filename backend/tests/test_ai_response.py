@@ -236,8 +236,13 @@ async def test_generate_ai_response_boosts_confidence_on_high_similarity():
     """Confidence is boosted by 0.1 when the top RAG result has similarity > 0.7."""
     mock_db = _make_mock_db()
 
+    # Provide 3+ messages so the first-message RAG-skip guard is bypassed
     history_result = MagicMock()
-    history_result.scalars.return_value.all.return_value = []
+    history_result.scalars.return_value.all.return_value = [
+        MagicMock(sender="CUSTOMER", text="이전 질문", confidence=None),
+        MagicMock(sender="AI", text="이전 답변", confidence=0.8),
+        MagicMock(sender="CUSTOMER", text="질문", confidence=None),
+    ]
     mock_db.execute = AsyncMock(return_value=history_result)
 
     # Model says 0.7 confidence, but similarity is 0.8 → should be boosted to 0.8

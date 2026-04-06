@@ -51,10 +51,29 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    let response = await fetch(`${this.baseUrl}${path}`, {
-      ...options,
-      headers,
-    });
+    const doFetch = () => fetch(`${this.baseUrl}${path}`, { ...options, headers });
+    let response!: Response;
+
+    // Retry on network errors and 5xx (GET only, max 2 retries with backoff)
+    const isRetryable = !options.method || options.method === 'GET';
+    const maxRetries = isRetryable ? 2 : 0;
+
+    for (let attempt = 0; ; attempt++) {
+      try {
+        response = await doFetch();
+        if (response.status >= 500 && attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        break;
+      } catch (err) {
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        throw new Error('네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.');
+      }
+    }
 
     // Auto-refresh on 401 and retry once
     if (response.status === 401) {
