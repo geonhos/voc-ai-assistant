@@ -21,6 +21,7 @@ from app.models.user import User
 from app.schemas.conversation import ConversationResponse
 from app.schemas.message import ChatRequest, ChatResponse, MessageResponse
 from app.services import ai_response as ai_service
+from app.services import conversation as conv_service
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/customer", tags=["customer-chat"])
@@ -58,13 +59,11 @@ async def create_customer_conversation(
     current_user: User = Depends(get_current_customer_user),
 ) -> ConversationResponse:
     """Create a new conversation linked to the authenticated customer."""
-    conversation = Conversation(
-        customer_name=current_user.email.split("@")[0],
-        customer_email=current_user.email,
+    conversation = await conv_service.create_customer_conversation(
+        db,
         customer_user_id=current_user.id,
-        status="OPEN",
+        customer_email=current_user.email,
     )
-    db.add(conversation)
     await db.commit()
     await db.refresh(conversation)
     return ConversationResponse.model_validate(conversation)

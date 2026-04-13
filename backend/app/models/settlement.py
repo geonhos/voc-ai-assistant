@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -16,6 +16,9 @@ class Settlement(BaseModel):
     """Represents a daily settlement record for a merchant."""
 
     __tablename__ = "settlements"
+    __table_args__ = (
+        Index("ix_settlements_merchant_id_settlement_date", "merchant_id", "settlement_date"),
+    )
 
     merchant_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("merchants.id"), index=True, nullable=False

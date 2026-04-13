@@ -46,7 +46,7 @@ export function statusToVariant(status: ConversationStatus): BadgeVariant {
 export function statusToLabel(status: ConversationStatus): string {
   const map: Record<ConversationStatus, string> = {
     OPEN: '진행 중',
-    ESCALATED: '에스컬레이션',
+    ESCALATED: '상담사 연결',
     RESOLVED: '해결됨',
   };
   return map[status];

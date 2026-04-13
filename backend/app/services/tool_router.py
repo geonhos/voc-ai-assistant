@@ -13,20 +13,12 @@ from datetime import date
 from typing import Any, Optional
 
 import httpx
-
-# Module-level singleton HTTP client (cleaned up in main.py lifespan)
-_client: httpx.AsyncClient | None = None
-
-
-def _get_client() -> httpx.AsyncClient:
-    global _client
-    if _client is None or _client.is_closed:
-        _client = httpx.AsyncClient(timeout=30.0)
-    return _client
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.http_client import get_client as _get_client
 from app.tools.base import ToolRegistry, ToolResult
+from app.utils import strip_markdown_code_block as _strip_markdown_code_block
 
 logger = logging.getLogger(__name__)
 
@@ -53,26 +45,6 @@ _INTENT_CLASSIFICATION_PROMPT = """\
 
 반드시 JSON만 출력하세요.\
 """
-
-
-def _strip_markdown_code_block(text: str) -> str:
-    """Remove surrounding ```json ... ``` or ``` ... ``` fences if present.
-
-    Args:
-        text: Raw LLM output that may contain Markdown code fences.
-
-    Returns:
-        Clean JSON string with fences stripped.
-    """
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        # Drop the opening fence line (``` or ```json)
-        start = 1
-        # Drop the closing fence line if present
-        end = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
-        text = "\n".join(lines[start:end]).strip()
-    return text
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +75,7 @@ async def classify_intent(message: str) -> dict[str, Any]:
 
     client = _get_client()
     response = await client.post(
-        f"{settings.OLLAMA_URL}/api/chat",
+        "/api/chat",
         json={
             "model": settings.OLLAMA_CHAT_MODEL,
             "messages": [

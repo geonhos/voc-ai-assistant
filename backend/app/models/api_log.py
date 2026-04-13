@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +16,9 @@ class ApiLog(BaseModel):
     """Records each API request made by or on behalf of a merchant."""
 
     __tablename__ = "api_logs"
+    __table_args__ = (
+        Index("ix_api_logs_created_at", "created_at"),
+    )
 
     merchant_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("merchants.id"), index=True, nullable=False

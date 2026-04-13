@@ -143,6 +143,33 @@ async def list_conversations(
     return conversations, total
 
 
+async def create_customer_conversation(
+    db: AsyncSession,
+    customer_user_id: int,
+    customer_email: str,
+) -> Conversation:
+    """Create a new conversation linked to an authenticated customer user.
+
+    Args:
+        db: Active async database session.
+        customer_user_id: The customer user's database ID.
+        customer_email: Email of the authenticated customer user.
+
+    Returns:
+        The newly created Conversation instance.
+    """
+    conversation = Conversation(
+        customer_name=customer_email.split("@")[0],
+        customer_email=customer_email,
+        customer_user_id=customer_user_id,
+        status="OPEN",
+    )
+    db.add(conversation)
+    await db.flush()
+    await db.refresh(conversation)
+    return conversation
+
+
 async def create_merchant_conversation(
     db: AsyncSession,
     merchant_id: int | None,

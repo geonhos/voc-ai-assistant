@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { usePolling } from '@/hooks/usePolling';
 import type { Message, Conversation, ChatResponse } from '@/lib/types';
 
 interface MerchantChatViewModel {
@@ -21,7 +22,6 @@ interface MerchantChatViewModel {
 }
 
 const POLL_INTERVAL_MS = 3000;
-const POLL_MAX_ERRORS = 5;
 
 export function useMerchantChatViewModel(): MerchantChatViewModel {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -33,55 +33,28 @@ export function useMerchantChatViewModel(): MerchantChatViewModel {
   const [clarificationState, setClarificationState] = useState<string | null>(null);
   const [quickOptions, setQuickOptions] = useState<string[][] | null>(null);
 
-  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMessageIdRef = useRef<number>(0);
-  const pollErrorCountRef = useRef(0);
 
   const fetchMessages = useCallback(async (convId: number) => {
-    try {
-      const msgs = await apiClient.get<Message[]>(
-        `/merchant/conversations/${convId}/messages`,
-      );
-      pollErrorCountRef.current = 0;
-      if (msgs.length > 0) {
-        const latest = msgs[msgs.length - 1];
-        if (latest.id !== lastMessageIdRef.current) {
-          lastMessageIdRef.current = latest.id;
-          setMessages(msgs);
-        }
-      }
-    } catch {
-      pollErrorCountRef.current += 1;
-      if (pollErrorCountRef.current >= POLL_MAX_ERRORS) {
-        if (pollingRef.current !== null) {
-          clearTimeout(pollingRef.current);
-          pollingRef.current = null;
-        }
+    const msgs = await apiClient.get<Message[]>(
+      `/merchant/conversations/${convId}/messages`,
+    );
+    if (msgs.length > 0) {
+      const latest = msgs[msgs.length - 1];
+      if (latest.id !== lastMessageIdRef.current) {
+        lastMessageIdRef.current = latest.id;
+        setMessages(msgs);
       }
     }
   }, []);
 
-  useEffect(() => {
-    if (activeConversationId === null) return;
-
-    const schedulePoll = () => {
-      const jitter = Math.random() * 1000;
-      pollingRef.current = setTimeout(() => {
-        fetchMessages(activeConversationId).finally(() => {
-          if (pollErrorCountRef.current < POLL_MAX_ERRORS) {
-            schedulePoll();
-          }
-        });
-      }, POLL_INTERVAL_MS + jitter);
-    };
-    schedulePoll();
-
-    return () => {
-      if (pollingRef.current !== null) {
-        clearTimeout(pollingRef.current);
-      }
-    };
+  const pollCallback = useCallback(async () => {
+    if (activeConversationId !== null) {
+      await fetchMessages(activeConversationId);
+    }
   }, [activeConversationId, fetchMessages]);
+
+  usePolling(pollCallback, POLL_INTERVAL_MS, activeConversationId !== null);
 
   const loadConversations = useCallback(async () => {
     try {

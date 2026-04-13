@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { apiClient } from '@/lib/api-client';
 
 function ChatIcon({ className }: { className?: string }) {
   return (
@@ -37,26 +38,38 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const router = useRouter();
   const pathname = usePathname();
   const [userEmail, setUserEmail] = useState<string>('');
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     const role = localStorage.getItem('user_role');
     if (!token || role !== 'CUSTOMER') {
+      setIsAuthChecking(false);
       if (pathname !== '/customer/login') {
         router.push('/customer/login');
       }
       return;
     }
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      setUserEmail(payload.sub ? `User #${payload.sub}` : '');
-    } catch {
-      setUserEmail('');
-    }
+    apiClient
+      .get<{ id: number; email: string; role: string }>('/auth/me')
+      .then((data) => {
+        setUserEmail(data.email || `User #${data.id}`);
+      })
+      .catch(() => {
+        setUserEmail('');
+        router.push('/customer/login');
+      })
+      .finally(() => {
+        setIsAuthChecking(false);
+      });
   }, [pathname, router]);
 
   if (pathname === '/customer/login') {
     return <>{children}</>;
+  }
+
+  if (isAuthChecking) {
+    return <div className="flex items-center justify-center h-screen text-sm text-[var(--color-neutral-400)]">로딩 중...</div>;
   }
 
   const handleLogout = () => {

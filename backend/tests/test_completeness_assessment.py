@@ -387,7 +387,7 @@ class TestAssessCompletenessWithMockLLM:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_resp)
 
-        with patch("app.services.ai_response._get_client", return_value=mock_client):
+        with patch("app.services.completeness._get_client", return_value=mock_client):
             result = await assess_completeness("테스트 질문", {"tool": None}, [])
 
         assert result.is_complete is expected_complete

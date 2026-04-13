@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +16,9 @@ class Message(BaseModel):
     """A single message within a Conversation."""
 
     __tablename__ = "messages"
+    __table_args__ = (
+        Index("ix_messages_conversation_id_sender", "conversation_id", "sender"),
+    )
 
     conversation_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("conversations.id"), index=True, nullable=False

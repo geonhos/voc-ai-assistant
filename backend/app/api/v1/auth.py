@@ -99,22 +99,20 @@ async def merchant_login(
     Raises:
         HTTPException 401: If the MID or password is invalid.
     """
-    merchant_result = await db.execute(
-        select(Merchant).where(Merchant.mid == payload.mid)
+    join_result = await db.execute(
+        select(Merchant, User)
+        .join(User, User.merchant_id == Merchant.id)
+        .where(Merchant.mid == payload.mid)
     )
-    merchant = merchant_result.scalar_one_or_none()
-    if merchant is None:
+    row = join_result.one_or_none()
+    if row is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid merchant ID or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    user_result = await db.execute(
-        select(User).where(User.merchant_id == merchant.id)
-    )
-    user = user_result.scalar_one_or_none()
-    if user is None or not verify_password(payload.password, user.password_hash):
+    merchant, user = row
+    if not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid merchant ID or password",
@@ -137,7 +135,9 @@ async def merchant_login(
     response_model=TokenResponse,
     summary="Refresh access token using a valid refresh token",
 )
+@limiter.limit("10/minute")
 async def refresh(
+    request: Request,
     payload: RefreshRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
