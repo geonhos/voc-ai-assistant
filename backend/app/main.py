@@ -135,18 +135,19 @@ async def health_ready() -> JSONResponse:
     http_status = status.HTTP_200_OK
 
     try:
-        async for db in get_db():
+        from app.core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
             await db.execute(text("SELECT 1"))
-            break
     except Exception:
         result["db"] = "error"
         result["status"] = "degraded"
         http_status = status.HTTP_503_SERVICE_UNAVAILABLE
 
     try:
-        response = httpx.get(settings.OLLAMA_URL + "/api/tags", timeout=3.0)
-        if response.status_code != 200:
-            raise ValueError("Non-200 response")
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(settings.OLLAMA_URL + "/api/tags")
+            if response.status_code != 200:
+                raise ValueError("Non-200 response")
     except Exception:
         result["ollama"] = "error"
         result["status"] = "degraded"
