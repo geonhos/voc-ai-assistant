@@ -51,6 +51,7 @@ async def create_article(
             "Failed to generate embedding for article %s: %s", article.id, e
         )
 
+    await db.refresh(article)
     return article
 
 
@@ -144,6 +145,7 @@ async def update_article(
                 "Failed to regenerate embedding for article %s: %s", article.id, e
             )
 
+    await db.refresh(article)
     return article
 
 

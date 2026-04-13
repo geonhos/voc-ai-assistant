@@ -10,6 +10,8 @@ import json
 import logging
 from dataclasses import dataclass, field
 
+import httpx
+
 from app.core.config import settings
 from app.services.completeness_prompt import COMPLETENESS_ASSESSMENT_PROMPT
 from app.tools.base import ToolRegistry
@@ -152,7 +154,7 @@ async def assess_completeness(
             questions=data.get("questions", []),
             quick_options=data.get("quick_options", []),
         )
-    except Exception as exc:
+    except (httpx.HTTPError, httpx.TimeoutException, json.JSONDecodeError, KeyError) as exc:
         logger.warning(
             "Completeness assessment failed: %s — defaulting to complete", exc
         )

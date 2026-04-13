@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
     # AI / RAG settings
-    OLLAMA_CHAT_MODEL: str = "qwen2.5:7b"
+    OLLAMA_CHAT_MODEL: str = "exaone3.5:7.8b"
     OLLAMA_EMBED_MODEL: str = "bge-m3"
     EMBEDDING_DIM: int = 1024
     RAG_TOP_K: int = 3
@@ -37,13 +37,21 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env")
 
+    # Environment flag — set TESTING=1 in test fixtures to allow insecure defaults
+    TESTING: bool = False
+
     @model_validator(mode="after")
     def _validate_secrets(self) -> "Settings":
         if self.JWT_SECRET_KEY in _INSECURE_JWT_DEFAULTS:
-            logger.warning(
-                "⚠️  JWT_SECRET_KEY is using an insecure default! "
-                "Set a secure random value via environment variable."
-            )
+            if self.TESTING:
+                logger.warning(
+                    "⚠️  JWT_SECRET_KEY is using an insecure default (allowed in TESTING mode)."
+                )
+            else:
+                raise ValueError(
+                    "JWT_SECRET_KEY is using an insecure default! "
+                    "Set a secure random value via the JWT_SECRET_KEY environment variable."
+                )
         return self
 
 

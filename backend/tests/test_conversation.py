@@ -81,6 +81,7 @@ async def test_update_conversation_status_to_resolved():
     mock_db = MagicMock()
     mock_db.get = AsyncMock(return_value=mock_conv)
     mock_db.flush = AsyncMock()
+    mock_db.refresh = AsyncMock()
 
     result = await update_conversation_status(mock_db, 1, "RESOLVED", resolved_by=5)
 

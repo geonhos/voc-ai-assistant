@@ -26,7 +26,7 @@ class Conversation(BaseModel):
     customer_name: Mapped[str] = mapped_column(String(100), default="", nullable=False)
     customer_email: Mapped[str] = mapped_column(String(255), default="", nullable=False)
     customer_phone: Mapped[str] = mapped_column(String(20), default="", nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="OPEN", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="OPEN", nullable=False, index=True)
     topic: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -36,6 +36,9 @@ class Conversation(BaseModel):
     )
     merchant_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("merchants.id"), nullable=True, index=True
+    )
+    customer_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True, index=True
     )
     clarification_state: Mapped[Optional[dict]] = mapped_column(
         JSONB, nullable=True

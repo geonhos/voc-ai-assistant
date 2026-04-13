@@ -11,7 +11,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api.v1 import auth, chat, admin, knowledge, merchant_admin, merchant_chat
+from app.api.v1 import auth, chat, admin, knowledge, merchant_admin, merchant_chat, customer_chat
 from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
@@ -35,12 +35,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Cleanup httpx singleton clients on shutdown
     import app.services.embedding as emb_mod
     import app.services.ai_response as ai_mod
+    import app.services.tool_router as tr_mod
     if emb_mod._client is not None:
         await emb_mod._client.aclose()
         emb_mod._client = None
     if ai_mod._client is not None:
         await ai_mod._client.aclose()
         ai_mod._client = None
+    if tr_mod._client is not None:
+        await tr_mod._client.aclose()
+        tr_mod._client = None
     logger.info("Shutting down VOC AI Assistant API...")
 
 
@@ -82,6 +86,7 @@ app.include_router(admin.router, prefix=API_V1_PREFIX)
 app.include_router(knowledge.router, prefix=API_V1_PREFIX)
 app.include_router(merchant_admin.router, prefix=API_V1_PREFIX)
 app.include_router(merchant_chat.router, prefix=API_V1_PREFIX)
+app.include_router(customer_chat.router, prefix=API_V1_PREFIX)
 
 # ---------------------------------------------------------------------------
 # Global exception handlers

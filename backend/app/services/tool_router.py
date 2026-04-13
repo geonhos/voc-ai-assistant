@@ -13,6 +13,16 @@ from datetime import date
 from typing import Any, Optional
 
 import httpx
+
+# Module-level singleton HTTP client (cleaned up in main.py lifespan)
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=30.0)
+    return _client
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -91,27 +101,31 @@ async def classify_intent(message: str) -> dict[str, Any]:
         today=date.today().isoformat(),
     )
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{settings.OLLAMA_URL}/api/chat",
-            json={
-                "model": settings.OLLAMA_CHAT_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message},
-                ],
-                "stream": False,
-                "options": {
-                    "temperature": settings.TOOL_CLASSIFICATION_TEMPERATURE,
-                    "num_predict": settings.TOOL_CLASSIFICATION_MAX_TOKENS,
-                },
+    client = _get_client()
+    response = await client.post(
+        f"{settings.OLLAMA_URL}/api/chat",
+        json={
+            "model": settings.OLLAMA_CHAT_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": message},
+            ],
+            "stream": False,
+            "options": {
+                "temperature": settings.TOOL_CLASSIFICATION_TEMPERATURE,
+                "num_predict": settings.TOOL_CLASSIFICATION_MAX_TOKENS,
             },
-        )
-        response.raise_for_status()
+        },
+    )
+    response.raise_for_status()
 
     raw_content: str = response.json()["message"]["content"]
     clean_content = _strip_markdown_code_block(raw_content)
-    return json.loads(clean_content)
+    try:
+        return json.loads(clean_content)
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse intent classification JSON: %s", clean_content[:200])
+        return {"tool": None, "params": {}}
 
 
 async def execute_tool(

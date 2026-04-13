@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -271,7 +272,7 @@ class TestAssessCompleteness:
         from app.services.completeness import assess_completeness
 
         mock_client = AsyncMock()
-        mock_client.post = AsyncMock(side_effect=RuntimeError("network error"))
+        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("network error"))
 
         with patch("app.services.ai_response._get_client", return_value=mock_client):
             result = await assess_completeness("질문", {}, [])
@@ -517,7 +518,10 @@ class TestGenerateMerchantAiResponsePhase3:
             ),
             patch(
                 "app.services.ai_response._get_client",
-                return_value=AsyncMock(post=AsyncMock(return_value=fake_ollama)),
+                return_value=AsyncMock(post=AsyncMock(side_effect=[
+                    fake_ollama,  # Pass 2 LLM
+                    _make_fake_ollama_response("0.85"),  # Self-eval
+                ])),
             ),
         ):
             result = await generate_merchant_ai_response(
@@ -579,7 +583,10 @@ class TestGenerateMerchantAiResponsePhase3:
             ),
             patch(
                 "app.services.ai_response._get_client",
-                return_value=AsyncMock(post=AsyncMock(return_value=fake_ollama)),
+                return_value=AsyncMock(post=AsyncMock(side_effect=[
+                    fake_ollama,  # Pass 2 LLM
+                    _make_fake_ollama_response("0.70"),  # Self-eval
+                ])),
             ),
         ):
             result = await generate_merchant_ai_response(
@@ -853,7 +860,7 @@ class TestGenerateMerchantAiResponsePhase3:
                 return_value=AsyncMock(
                     post=AsyncMock(side_effect=[
                         fake_ollama,  # Pass 2 LLM
-                        RuntimeError("timeout"),  # Self-eval fails
+                        httpx.ReadTimeout("timeout"),  # Self-eval fails
                     ]),
                 ),
             ),
