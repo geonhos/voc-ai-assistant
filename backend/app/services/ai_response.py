@@ -220,7 +220,7 @@ async def generate_ai_response(
         response.raise_for_status()
         data = response.json()
         raw_text: str = data["message"]["content"]
-    except Exception as e:
+    except (httpx.HTTPError, httpx.TimeoutException) as e:
         logger.error("Ollama API error for conversation %d: %s", conversation_id, e)
         ollama_error = True
         raw_text = (
@@ -705,7 +705,7 @@ async def generate_merchant_ai_response(
         )
         response.raise_for_status()
         raw_text: str = response.json()["message"]["content"]
-    except Exception as exc:
+    except (httpx.HTTPError, httpx.TimeoutException) as exc:
         logger.error(
             "Ollama API error (merchant) for conv %d: %s", conversation_id, exc
         )
@@ -771,7 +771,7 @@ async def generate_merchant_ai_response(
                 quality_score,
                 confidence,
             )
-        except Exception as exc:
+        except (httpx.HTTPError, httpx.TimeoutException) as exc:
             logger.debug(
                 "Conv %d self-eval skipped: %s", conversation_id, exc
             )

@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -488,16 +489,13 @@ class TestClassifyIntent:
             }
         )
 
-        with patch(
-            "app.services.tool_router.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=fake_response)
-            mock_client_cls.return_value.__aenter__ = AsyncMock(
-                return_value=mock_client
-            )
-            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=fake_response)
 
+        with patch(
+            "app.services.tool_router._get_client",
+            return_value=mock_client,
+        ):
             result = await classify_intent("TXN001 거래 조회해 주세요")
 
         assert result["tool"] == "lookup_transaction"
@@ -515,16 +513,13 @@ class TestClassifyIntent:
             return_value={"message": {"content": content}}
         )
 
-        with patch(
-            "app.services.tool_router.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=fake_response)
-            mock_client_cls.return_value.__aenter__ = AsyncMock(
-                return_value=mock_client
-            )
-            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=fake_response)
 
+        with patch(
+            "app.services.tool_router._get_client",
+            return_value=mock_client,
+        ):
             result = await classify_intent("안녕하세요")
 
         assert result["tool"] is None
@@ -540,16 +535,13 @@ class TestClassifyIntent:
             return_value={"message": {"content": '{"tool": null}'}}
         )
 
-        with patch(
-            "app.services.tool_router.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=fake_response)
-            mock_client_cls.return_value.__aenter__ = AsyncMock(
-                return_value=mock_client
-            )
-            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=fake_response)
 
+        with patch(
+            "app.services.tool_router._get_client",
+            return_value=mock_client,
+        ):
             result = await classify_intent("결제 API 연동 방법이 궁금합니다")
 
         assert result.get("tool") is None
@@ -824,7 +816,7 @@ class TestGenerateMerchantAiResponse:
             patch(
                 "app.services.ai_response._get_client",
                 return_value=AsyncMock(
-                    post=AsyncMock(side_effect=RuntimeError("connection refused"))
+                    post=AsyncMock(side_effect=httpx.ConnectError("connection refused"))
                 ),
             ),
             patch(

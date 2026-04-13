@@ -81,6 +81,7 @@ async def me(user: User = Depends(get_current_user)) -> MeResponse:
     response_model=TokenResponse,
     summary="Authenticate a merchant with MID and password",
 )
+@limiter.limit("5/minute")
 async def merchant_login(
     request: Request,
     payload: MerchantLoginRequest,

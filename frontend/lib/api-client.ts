@@ -88,7 +88,8 @@ class ApiClient {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         if (typeof window !== 'undefined') {
-          window.location.href = '/login';
+          const role = localStorage.getItem('user_role');
+          window.location.href = role === 'CUSTOMER' ? '/customer/login' : '/login';
         }
       }
     }

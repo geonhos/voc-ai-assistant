@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from app.services.ai_response import (
@@ -217,7 +218,7 @@ async def test_generate_ai_response_handles_openai_error_gracefully():
         patch(
             "app.services.ai_response._get_client",
             return_value=AsyncMock(
-                post=AsyncMock(side_effect=RuntimeError("network error"))
+                post=AsyncMock(side_effect=httpx.ConnectError("network error"))
             ),
         ),
         patch(

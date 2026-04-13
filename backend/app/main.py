@@ -35,12 +35,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Cleanup httpx singleton clients on shutdown
     import app.services.embedding as emb_mod
     import app.services.ai_response as ai_mod
+    import app.services.tool_router as tr_mod
     if emb_mod._client is not None:
         await emb_mod._client.aclose()
         emb_mod._client = None
     if ai_mod._client is not None:
         await ai_mod._client.aclose()
         ai_mod._client = None
+    if tr_mod._client is not None:
+        await tr_mod._client.aclose()
+        tr_mod._client = None
     logger.info("Shutting down VOC AI Assistant API...")
 
 
