@@ -15,6 +15,7 @@ before falling through to the normal tool-execution path.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any, Optional
@@ -24,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.http_client import get_client as _get_client
 from app.models.message import Message
 from app.services.escalation import escalate_conversation
 from app.services.rag import format_context, retrieve_context
@@ -74,17 +76,6 @@ ESCALATION_KEYWORDS: list[str] = [
     "신고",
 ]
 
-_client: httpx.AsyncClient | None = None
-
-
-def _get_client() -> httpx.AsyncClient:
-    """Return a singleton async HTTP client for Ollama."""
-    global _client
-    if _client is None:
-        _client = httpx.AsyncClient(base_url=settings.OLLAMA_URL, timeout=120.0)
-    return _client
-
-
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
@@ -93,14 +84,15 @@ def _get_client() -> httpx.AsyncClient:
 async def _get_conversation_history(
     db: AsyncSession,
     conversation_id: int,
-    max_messages: int = 10,
+    max_messages: int | None = None,
 ) -> list[dict]:
     """Fetch the most recent messages for a conversation as chat dicts."""
+    limit = max_messages if max_messages is not None else settings.MAX_CONVERSATION_HISTORY
     result = await db.execute(
         select(Message)
         .where(Message.conversation_id == conversation_id)
         .order_by(Message.created_at.desc())
-        .limit(max_messages)
+        .limit(limit)
     )
     messages = list(reversed(result.scalars().all()))
 
@@ -178,8 +170,8 @@ async def generate_ai_response(
     #    Skip KB on the very first customer message (conversation has <=2 messages:
     #    the customer msg we just flushed + possibly one prior).  This prevents the
     #    AI from pre-emptively citing KB content before the customer provides specifics.
-    history_for_count = await _get_conversation_history(db, conversation_id)
-    if len(history_for_count) <= 2:
+    history = await _get_conversation_history(db, conversation_id)
+    if len(history) <= 2:
         rag_articles: list[dict] = []
         context_str = ""
     else:
@@ -193,7 +185,6 @@ async def generate_ai_response(
 
     # 4 & 5. Build prompt messages (history already includes the just-flushed customer msg)
     system_message = SYSTEM_PROMPT.format(context=context_str)
-    history = await _get_conversation_history(db, conversation_id)
 
     messages: list[dict] = [
         {"role": "system", "content": system_message},
@@ -210,10 +201,10 @@ async def generate_ai_response(
                 "model": settings.OLLAMA_CHAT_MODEL,
                 "messages": messages,
                 "stream": False,
-                "keep_alive": "10m",
+                "keep_alive": settings.OLLAMA_KEEP_ALIVE,
                 "options": {
-                    "num_predict": 500,
-                    "temperature": 0.7,
+                    "num_predict": settings.OLLAMA_NUM_PREDICT,
+                    "temperature": settings.OLLAMA_TEMPERATURE,
                 },
             },
         )
@@ -696,10 +687,10 @@ async def generate_merchant_ai_response(
                 "model": settings.OLLAMA_CHAT_MODEL,
                 "messages": chat_messages,
                 "stream": False,
-                "keep_alive": "10m",
+                "keep_alive": settings.OLLAMA_KEEP_ALIVE,
                 "options": {
-                    "num_predict": 500,
-                    "temperature": 0.7,
+                    "num_predict": settings.OLLAMA_NUM_PREDICT,
+                    "temperature": settings.OLLAMA_TEMPERATURE,
                 },
             },
         )
@@ -771,7 +762,7 @@ async def generate_merchant_ai_response(
                 quality_score,
                 confidence,
             )
-        except (httpx.HTTPError, httpx.TimeoutException) as exc:
+        except (httpx.HTTPError, httpx.TimeoutException, ValueError, json.JSONDecodeError) as exc:
             logger.debug(
                 "Conv %d self-eval skipped: %s", conversation_id, exc
             )

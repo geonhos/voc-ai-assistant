@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 ConversationStatus = Literal["OPEN", "ESCALATED", "RESOLVED"]
@@ -14,7 +14,7 @@ ConversationStatus = Literal["OPEN", "ESCALATED", "RESOLVED"]
 class ConversationCreate(BaseModel):
     """Payload to create a new conversation — only initial message required."""
 
-    initial_message: str
+    initial_message: str = Field(..., max_length=2000)
 
 
 class ContactInfoUpdate(BaseModel):

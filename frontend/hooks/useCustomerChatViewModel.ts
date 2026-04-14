@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { usePolling } from '@/hooks/usePolling';
 import type {
   Message,
   CreateConversationResponse,
@@ -23,7 +24,6 @@ interface CustomerChatViewModel {
 }
 
 const POLL_INTERVAL_MS = 3000;
-const POLL_MAX_ERRORS = 5;
 
 export function useCustomerChatViewModel(): CustomerChatViewModel {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,7 +36,6 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
   const [sendError, setSendError] = useState<string | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
 
-  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMessageIdRef = useRef<number>(0);
   const accessTokenRef = useRef<string | null>(null);
 
@@ -46,55 +45,27 @@ export function useCustomerChatViewModel(): CustomerChatViewModel {
       : undefined;
   }, []);
 
-  const pollErrorCountRef = useRef(0);
-
   const fetchMessages = useCallback(async (convId: number) => {
-    try {
-      const msgs = await apiClient.get<Message[]>(
-        `/chat/conversations/${convId}/messages`,
-        getConvHeaders(),
-      );
-      pollErrorCountRef.current = 0;
-      if (msgs.length > 0) {
-        const latest = msgs[msgs.length - 1];
-        if (latest.id !== lastMessageIdRef.current) {
-          lastMessageIdRef.current = latest.id;
-          setMessages(msgs);
-        }
-      }
-    } catch {
-      pollErrorCountRef.current += 1;
-      if (pollErrorCountRef.current >= POLL_MAX_ERRORS) {
-        // Stop polling after too many consecutive errors
-        if (pollingRef.current !== null) {
-          clearTimeout(pollingRef.current);
-          pollingRef.current = null;
-        }
+    const msgs = await apiClient.get<Message[]>(
+      `/chat/conversations/${convId}/messages`,
+      getConvHeaders(),
+    );
+    if (msgs.length > 0) {
+      const latest = msgs[msgs.length - 1];
+      if (latest.id !== lastMessageIdRef.current) {
+        lastMessageIdRef.current = latest.id;
+        setMessages(msgs);
       }
     }
   }, [getConvHeaders]);
 
-  useEffect(() => {
-    if (conversationId === null || isEscalated) return;
+  const pollCallback = useCallback(async () => {
+    if (conversationId !== null) {
+      await fetchMessages(conversationId);
+    }
+  }, [conversationId, fetchMessages]);
 
-    const schedulePoll = () => {
-      const jitter = Math.random() * 1000;
-      pollingRef.current = setTimeout(() => {
-        fetchMessages(conversationId).finally(() => {
-          if (pollErrorCountRef.current < POLL_MAX_ERRORS) {
-            schedulePoll();
-          }
-        });
-      }, POLL_INTERVAL_MS + jitter);
-    };
-    schedulePoll();
-
-    return () => {
-      if (pollingRef.current !== null) {
-        clearTimeout(pollingRef.current);
-      }
-    };
-  }, [conversationId, isEscalated, fetchMessages]);
+  usePolling(pollCallback, POLL_INTERVAL_MS, conversationId !== null && !isEscalated);
 
   // Create conversation on first message
   const ensureConversation = useCallback(async (firstMessage: string): Promise<{id: number; token: string} | null> => {

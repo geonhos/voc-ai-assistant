@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +23,7 @@ from app.schemas.message import ChatRequest, MessageResponse
 from app.services import conversation as conv_service
 from app.services import admin_message as admin_msg_service
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
@@ -29,7 +32,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
     response_model=ConversationListResponse,
     summary="List all conversations (paginated)",
 )
+@limiter.limit("30/minute")
 async def list_conversations(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     status_filter: str | None = Query(None, alias="status"),
@@ -64,7 +69,9 @@ async def list_conversations(
     response_model=ConversationResponse,
     summary="Get a single conversation by ID",
 )
+@limiter.limit("30/minute")
 async def get_conversation(
+    request: Request,
     conversation_id: int,
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
@@ -96,7 +103,9 @@ async def get_conversation(
     response_model=ConversationResponse,
     summary="Update conversation status",
 )
+@limiter.limit("30/minute")
 async def update_conversation_status(
+    request: Request,
     conversation_id: int,
     payload: ConversationStatusUpdate,
     db: AsyncSession = Depends(get_db),
@@ -135,7 +144,9 @@ async def update_conversation_status(
     response_model=DashboardStats,
     summary="Get aggregate dashboard statistics",
 )
+@limiter.limit("30/minute")
 async def get_dashboard_stats(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ) -> DashboardStats:
@@ -190,7 +201,9 @@ async def get_dashboard_stats(
     response_model=list[MessageResponse],
     summary="Get all messages in a conversation",
 )
+@limiter.limit("30/minute")
 async def get_conversation_messages(
+    request: Request,
     conversation_id: int,
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
@@ -223,7 +236,9 @@ async def get_conversation_messages(
     status_code=status.HTTP_201_CREATED,
     summary="Send an admin message into a conversation",
 )
+@limiter.limit("30/minute")
 async def send_admin_message(
+    request: Request,
     conversation_id: int,
     payload: ChatRequest,
     db: AsyncSession = Depends(get_db),

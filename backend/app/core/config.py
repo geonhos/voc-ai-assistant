@@ -31,6 +31,19 @@ class Settings(BaseSettings):
     CONFIDENCE_ESCALATE_THRESHOLD: float = 0.5
     MAX_LOW_CONFIDENCE_STREAK: int = 3
 
+    # Ollama LLM generation parameters
+    OLLAMA_TIMEOUT: float = 120.0
+    OLLAMA_NUM_PREDICT: int = 500
+    OLLAMA_TEMPERATURE: float = 0.7
+    OLLAMA_KEEP_ALIVE: str = "10m"
+
+    # Conversation history limit
+    MAX_CONVERSATION_HISTORY: int = 10
+
+    # Database connection pool settings
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
+
     # Tool classification settings
     TOOL_CLASSIFICATION_TEMPERATURE: float = 0.1
     TOOL_CLASSIFICATION_MAX_TOKENS: int = 200

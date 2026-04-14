@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 MessageSender = Literal["AI", "CUSTOMER", "ADMIN", "SYSTEM"]
@@ -14,7 +14,7 @@ MessageSender = Literal["AI", "CUSTOMER", "ADMIN", "SYSTEM"]
 class MessageCreate(BaseModel):
     """Payload to send a message within an existing conversation."""
 
-    text: str
+    text: str = Field(..., max_length=2000)
 
 
 class MessageResponse(BaseModel):
@@ -35,7 +35,7 @@ class MessageResponse(BaseModel):
 class ChatRequest(BaseModel):
     """Customer chat request for the public chat endpoint."""
 
-    text: str
+    text: str = Field(..., max_length=2000)
 
 
 class ChatResponse(BaseModel):

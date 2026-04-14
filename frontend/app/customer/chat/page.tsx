@@ -6,6 +6,9 @@ import { apiClient } from '@/lib/api-client';
 import { MessageBubble } from '@/components/MessageBubble';
 import type { Message, Conversation, ChatResponse } from '@/lib/types';
 
+const POLL_INTERVAL_MS = 3000;
+const POLL_MAX_ERRORS = 5;
+
 export default function CustomerChatPage() {
   return (
     <Suspense fallback={<div className="flex items-center justify-center h-full text-sm text-[var(--color-neutral-400)]">로딩 중...</div>}>
@@ -22,8 +25,12 @@ function CustomerChatContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [convId, setConvId] = useState<number | null>(conversationId ? Number(conversationId) : null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMessageIdRef = useRef<number>(0);
+  const pollErrorCountRef = useRef(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -32,16 +39,53 @@ function CustomerChatContent() {
   const fetchMessages = useCallback(async (id: number) => {
     try {
       const msgs = await apiClient.get<Message[]>(`/customer/conversations/${id}/messages`);
-      setMessages(msgs);
+      pollErrorCountRef.current = 0;
+      if (msgs.length > 0) {
+        const latest = msgs[msgs.length - 1];
+        if (latest.id !== lastMessageIdRef.current) {
+          lastMessageIdRef.current = latest.id;
+          setMessages(msgs);
+        }
+      }
     } catch {
-      // ignore
+      pollErrorCountRef.current += 1;
+      if (pollErrorCountRef.current >= POLL_MAX_ERRORS) {
+        if (pollingRef.current !== null) {
+          clearTimeout(pollingRef.current);
+          pollingRef.current = null;
+        }
+      }
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     if (convId) {
       fetchMessages(convId);
     }
+  }, [convId, fetchMessages]);
+
+  // Polling
+  useEffect(() => {
+    if (convId === null) return;
+
+    const schedulePoll = () => {
+      const jitter = Math.random() * 1000;
+      pollingRef.current = setTimeout(() => {
+        fetchMessages(convId).finally(() => {
+          if (pollErrorCountRef.current < POLL_MAX_ERRORS) {
+            schedulePoll();
+          }
+        });
+      }, POLL_INTERVAL_MS + jitter);
+    };
+    schedulePoll();
+
+    return () => {
+      if (pollingRef.current !== null) {
+        clearTimeout(pollingRef.current);
+      }
+    };
   }, [convId, fetchMessages]);
 
   useEffect(() => {
@@ -52,6 +96,7 @@ function CustomerChatContent() {
     const text = input.trim();
     if (!text || isSending) return;
 
+    setSendError(null);
     let currentConvId = convId;
 
     // Create conversation if none exists
@@ -61,7 +106,8 @@ function CustomerChatContent() {
         currentConvId = conv.id;
         setConvId(conv.id);
         router.replace(`/customer/chat?id=${conv.id}`);
-      } catch {
+      } catch (err) {
+        setSendError(err instanceof Error ? err.message : '대화를 시작할 수 없습니다.');
         return;
       }
     }
@@ -84,9 +130,9 @@ function CustomerChatContent() {
         { text },
       );
       await fetchMessages(currentConvId);
-    } catch {
-      // remove optimistic on failure
+    } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      setSendError(err instanceof Error ? err.message : '메시지 전송에 실패했습니다.');
     } finally {
       setIsSending(false);
     }
@@ -134,6 +180,11 @@ function CustomerChatContent() {
             toolData={msg.tool_data}
           />
         ))}
+        {sendError && (
+          <div className="text-center py-2">
+            <span className="text-xs text-[var(--color-danger)]">{sendError}</span>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 

@@ -30,6 +30,16 @@ export default function MerchantChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Restore active conversation from localStorage (set by conversations list page)
+  useEffect(() => {
+    const storedId = localStorage.getItem('merchant_active_conversation_id');
+    if (storedId) {
+      localStorage.removeItem('merchant_active_conversation_id');
+      vm.selectConversation(Number(storedId));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

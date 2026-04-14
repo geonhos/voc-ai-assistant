@@ -220,8 +220,8 @@ def should_force_answer(state: Optional[ClarificationState]) -> bool:
         state: Current clarification state, or ``None`` for idle conversations.
 
     Returns:
-        ``True`` if ``turn_count > MAX_CLARIFICATION_TURNS``.
+        ``True`` if ``turn_count >= MAX_CLARIFICATION_TURNS``.
     """
     if not state:
         return False
-    return state.get("turn_count", 0) > MAX_CLARIFICATION_TURNS
+    return state.get("turn_count", 0) >= MAX_CLARIFICATION_TURNS

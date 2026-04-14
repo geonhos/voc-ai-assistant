@@ -1,66 +1,53 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMerchantChatViewModel } from '@/hooks/useMerchantChatViewModel';
-import type { ConversationStatus } from '@/lib/types';
-
-function StatusBadge({ status }: { status: ConversationStatus }) {
-  const config: Record<ConversationStatus, { bg: string; text: string; label: string }> = {
-    OPEN: {
-      bg: 'bg-[var(--color-primary-light)] border border-[var(--color-primary)]',
-      text: 'text-[var(--color-primary)]',
-      label: '진행 중',
-    },
-    ESCALATED: {
-      bg: 'bg-[var(--color-warning-light)] border border-[var(--color-warning)]',
-      text: 'text-[var(--color-warning)]',
-      label: '상담사 연결',
-    },
-    RESOLVED: {
-      bg: 'bg-[var(--color-success-light)] border border-[var(--color-success-border)]',
-      text: 'text-[var(--color-success)]',
-      label: '해결됨',
-    },
-  };
-
-  const style = config[status];
-
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${style.bg} ${style.text}`}>
-      {style.label}
-    </span>
-  );
-}
-
-function formatDate(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return dateStr;
-  }
-}
+import { apiClient } from '@/lib/api-client';
+import { Badge, statusToVariant, statusToLabel } from '@/components/Badge';
+import { formatDate } from '@/lib/utils';
+import type { Conversation } from '@/lib/types';
 
 export default function MerchantConversationsPage() {
-  const vm = useMerchantChatViewModel();
   const router = useRouter();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    vm.loadConversations();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const loadConversations = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const convs = await apiClient.get<Conversation[]>('/merchant/conversations');
+      setConversations(convs);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '대화 목록을 불러오지 못했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
+
   const handleNewConversation = async () => {
-    const id = await vm.createConversation();
-    if (id !== null) {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const conversation = await apiClient.post<Conversation>('/merchant/conversations', {});
+      // Store the new conversation id for the chat page to pick up
+      localStorage.setItem('merchant_active_conversation_id', String(conversation.id));
       router.push('/merchant/chat');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '대화를 시작할 수 없습니다.');
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleSelectConversation = (id: number) => {
+    localStorage.setItem('merchant_active_conversation_id', String(id));
+    router.push('/merchant/chat');
   };
 
   return (
@@ -76,7 +63,7 @@ export default function MerchantConversationsPage() {
         <button
           type="button"
           onClick={handleNewConversation}
-          disabled={vm.isLoading}
+          disabled={isLoading}
           className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-primary)] text-white text-sm font-semibold rounded-[var(--radius-md)] hover:bg-[var(--color-primary-dark)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -86,8 +73,15 @@ export default function MerchantConversationsPage() {
         </button>
       </div>
 
+      {/* Error */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       {/* List */}
-      {vm.conversations.length === 0 ? (
+      {conversations.length === 0 && !isLoading ? (
         <div className="bg-white rounded-[var(--radius-xl)] border border-[var(--color-neutral-200)] p-12 text-center">
           <div className="w-12 h-12 rounded-full bg-[var(--color-neutral-100)] flex items-center justify-center mx-auto mb-4">
             <svg className="w-6 h-6 text-[var(--color-neutral-400)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -108,14 +102,11 @@ export default function MerchantConversationsPage() {
       ) : (
         <div className="bg-white rounded-[var(--radius-xl)] border border-[var(--color-neutral-200)] overflow-hidden">
           <ul className="divide-y divide-[var(--color-neutral-100)]">
-            {vm.conversations.map((conv) => (
+            {conversations.map((conv) => (
               <li key={conv.id}>
                 <button
                   type="button"
-                  onClick={() => {
-                    vm.selectConversation(conv.id);
-                    router.push('/merchant/chat');
-                  }}
+                  onClick={() => handleSelectConversation(conv.id)}
                   className="w-full flex items-start gap-4 px-5 py-4 text-left hover:bg-[var(--color-neutral-50)] transition-colors"
                 >
                   {/* Icon */}
@@ -132,7 +123,11 @@ export default function MerchantConversationsPage() {
                       <span className="text-sm font-medium text-[var(--color-neutral-900)]">
                         문의 #{conv.id}
                       </span>
-                      <StatusBadge status={conv.status} />
+                      <Badge
+                        label={statusToLabel(conv.status)}
+                        variant={statusToVariant(conv.status)}
+                        size="sm"
+                      />
                     </div>
                     <p className="text-xs text-[var(--color-neutral-500)]">
                       {formatDate(conv.updated_at || conv.created_at)}

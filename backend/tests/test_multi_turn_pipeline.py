@@ -225,7 +225,7 @@ class TestAssessCompleteness:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=fake_response)
 
-        with patch("app.services.ai_response._get_client", return_value=mock_client):
+        with patch("app.services.completeness._get_client", return_value=mock_client):
             result = await assess_completeness(
                 "TXN001 거래 조회해 주세요",
                 {"tool": "lookup_transaction"},
@@ -254,7 +254,7 @@ class TestAssessCompleteness:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=fake_response)
 
-        with patch("app.services.ai_response._get_client", return_value=mock_client):
+        with patch("app.services.completeness._get_client", return_value=mock_client):
             result = await assess_completeness(
                 "거래 조회해 주세요",
                 {"tool": None},
@@ -274,7 +274,7 @@ class TestAssessCompleteness:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(side_effect=httpx.ConnectError("network error"))
 
-        with patch("app.services.ai_response._get_client", return_value=mock_client):
+        with patch("app.services.completeness._get_client", return_value=mock_client):
             result = await assess_completeness("질문", {}, [])
 
         assert result.is_complete is True

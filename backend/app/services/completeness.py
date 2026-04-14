@@ -13,8 +13,10 @@ from dataclasses import dataclass, field
 import httpx
 
 from app.core.config import settings
+from app.core.http_client import get_client as _get_client
 from app.services.completeness_prompt import COMPLETENESS_ASSESSMENT_PROMPT
 from app.tools.base import ToolRegistry
+from app.utils import strip_markdown_code_block as _strip_markdown_code_block
 
 logger = logging.getLogger(__name__)
 
@@ -39,27 +41,6 @@ class CompletenessResult:
     missing_fields: list[str] = field(default_factory=list)
     questions: list[str] = field(default_factory=list)
     quick_options: list[list[str]] = field(default_factory=list)
-
-
-def _strip_markdown_code_block(text: str) -> str:
-    """Remove surrounding ```json ... ``` or ``` ... ``` fences if present.
-
-    Replicates the same stripping logic used in :mod:`app.services.tool_router`
-    so that both services handle LLM output consistently.
-
-    Args:
-        text: Raw LLM output that may contain Markdown code fences.
-
-    Returns:
-        Clean JSON string with fences stripped.
-    """
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        start = 1
-        end = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
-        text = "\n".join(lines[start:end]).strip()
-    return text
 
 
 async def assess_completeness(
@@ -120,8 +101,6 @@ async def assess_completeness(
     )
 
     try:
-        from app.services.ai_response import _get_client
-
         client = _get_client()
         response = await client.post(
             "/api/chat",
